@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cardle</title>
+  <meta name="description" content="Monster-Sammelkartenspiel: Booster-Packs öffnen, 32 Elemente, Holo-Karten, automatische Kämpfe.">
+  <meta name="theme-color" content="#0d0820">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='3' width='20' height='26' rx='3' fill='%23ffd447' stroke='%232a1450' stroke-width='2'/%3E%3Ccircle cx='16' cy='15' r='6' fill='%238a5cff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css?v=0.1.0">
+  <link rel="stylesheet" href="css/karte.css?v=0.1.0">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="marke"><span class="logo-rad"></span><span class="logo-text">CARDLE</span></div>
+      <nav class="nav" aria-label="Hauptmenü"></nav>
+      <div class="status"></div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+  <div id="lade" class="lade"><div class="logo-rad gross"></div><p>Karten werden gemischt …</p></div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+  <div id="fx-layer"></div>
+  <script type="module" src="js/main.js?v=0.1.0"></script>
+</body>
+</html>

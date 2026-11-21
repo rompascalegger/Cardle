@@ -66,6 +66,7 @@ function neuerStand() {
     stat: { packs: 0, karten: 0, besteStufe: 1, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), autoPacks: 0, muenzenAusgegeben: 0 },
     einst: { lautstaerke: 0.45, stumm: false, bewegung: 'auto', aufdecken: 'normal' },
     gesehen: [], // Indizes neuer Karten seit dem letzten Besuch der Sammlung
+    arten: CONFIG.monster.artenProElement, // Arten je Element, mit denen die Karten gespeichert sind
   };
 }
 
@@ -112,11 +113,13 @@ export const anzahlKarten = () => S.karten.length;
 
 // ---------- Laden/Speichern ----------
 export async function laden() {
+  let gespeicherteArten = CONFIG.monster.artenProElement;
   let roh = await IDB.get(SLOT);
   if (!roh) { try { roh = localStorage.getItem(SLOT); } catch { /* ignore */ } }
   if (roh) {
     try {
       const d = JSON.parse(roh);
+      gespeicherteArten = d.arten || 3;
       S.d = Object.assign(neuerStand(), d);
       S.d.stat = Object.assign(neuerStand().stat, d.stat || {});
       S.d.einst = Object.assign(neuerStand().einst, d.einst || {});
@@ -124,11 +127,26 @@ export async function laden() {
     } catch { S.d = neuerStand(); }
   }
   S.karten = S.d.karten ? S.d.karten.split(';') : [];
+  migriereArten(gespeicherteArten);
   S.rng = new Rng(S.d.seed);
   if (S.d.rng) S.rng.setState(S.d.rng);
   if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 100000; }
   baueIndex();
   S.d.team = (S.d.team || []).filter((i) => i < S.karten.length);
+}
+
+// Ändert sich die Zahl der Arten je Element, bleiben Element und Nummer einer Art erhalten.
+function migriereArten(alt) {
+  const neu = CONFIG.monster.artenProElement;
+  if (alt !== neu) {
+    S.karten = S.karten.map((code) => {
+      const c = dekodiere(code);
+      const el = Math.floor(c.art / alt), nr = c.art % alt;
+      c.art = el * neu + Math.min(nr, neu - 1);
+      return kodiere(c);
+    });
+  }
+  S.d.arten = neu;
 }
 
 let speicherTimer = null;
@@ -145,6 +163,13 @@ export function speichernBald(ms = 1500) {
   S.dirty = true;
   clearTimeout(speicherTimer);
   speicherTimer = setTimeout(speichern, ms);
+}
+// Gedrosselt: speichert spätestens nach ms, auch wenn ständig neue Änderungen kommen (Auto-Öffnen)
+let drosselTimer = null;
+export function speichernSpaetestens(ms = 3000) {
+  S.dirty = true;
+  if (drosselTimer) return;
+  drosselTimer = setTimeout(() => { drosselTimer = null; speichern(); }, ms);
 }
 export async function zuruecksetzen() {
   S.d = neuerStand();

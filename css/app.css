@@ -220,11 +220,11 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .stufen-liste { margin-top: 10px; } .stufen-liste summary { cursor: pointer; color: var(--leise); margin-bottom: 6px; }
 
 /* ---------- Öffnungs-Zeremonie ---------- */
-.oeffnen { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-rows: auto 1fr auto auto auto; justify-items: center; opacity: 0; transition: opacity .3s; overflow: hidden; --glow: #fff; }
+.oeffnen { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto auto; justify-items: center; opacity: 0; transition: opacity .3s; overflow: hidden; overscroll-behavior: contain; background: #0b0619; --glow: #fff; }
 .oeffnen.an { opacity: 1; }
-.oe-hg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 42%, #2a1a5c, #0b0619 70%); }
+.oe-hg { position: fixed; inset: 0; background: radial-gradient(circle at 50% 42%, #2a1a5c, #0b0619 70%); }
 .oe-hg::after { content: ''; position: absolute; inset: 0; background-image: var(--glitzer); background-size: 200px 200px; opacity: .35; animation: partikel 30s linear infinite; }
-.oe-glow { position: absolute; left: 50%; top: 42%; width: 120vmin; height: 120vmin; transform: translate(-50%, -50%) scale(.4); border-radius: 50%; background: radial-gradient(circle, var(--glow), transparent 62%); opacity: 0; transition: opacity var(--ladung, .3s) ease-in, transform var(--ladung, .3s) cubic-bezier(.3, 0, .2, 1); pointer-events: none; mix-blend-mode: screen; }
+.oe-glow { position: fixed; left: 50%; top: 42%; width: 120vmin; height: 120vmin; transform: translate(-50%, -50%) scale(.4); border-radius: 50%; background: radial-gradient(circle, var(--glow), transparent 62%); opacity: 0; transition: opacity var(--ladung, .3s) ease-in, transform var(--ladung, .3s) cubic-bezier(.3, 0, .2, 1); pointer-events: none; mix-blend-mode: screen; }
 .oeffnen.glueht .oe-glow { opacity: .25; transform: translate(-50%, -50%) scale(.7); }
 .oeffnen.glueht[data-stufe="1"] .oe-glow { opacity: .06; }
 .oeffnen.glueht[data-stufe="2"] .oe-glow { opacity: .3; }
@@ -232,11 +232,11 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .oeffnen.glueht:is([data-stufe="5"], [data-stufe="6"]) .oe-glow { opacity: .7; transform: translate(-50%, -50%) scale(1); animation: glowPuls .5s ease-in-out infinite alternate; }
 .oeffnen.glueht:not([data-stufe="1"]):not([data-stufe="2"]):not([data-stufe="3"]):not([data-stufe="4"]):not([data-stufe="5"]):not([data-stufe="6"]) .oe-glow { opacity: .95; transform: translate(-50%, -50%) scale(1.2); animation: glowPuls .3s ease-in-out infinite alternate; }
 @keyframes glowPuls { to { filter: brightness(1.5); } }
-.oe-strahlen { position: absolute; left: 50%; top: 42%; width: 200vmax; height: 200vmax; transform: translate(-50%, -50%); background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--glow) 55%, transparent) 0deg 5deg, transparent 5deg 15deg); -webkit-mask: radial-gradient(circle, #000 0%, transparent 45%); mask: radial-gradient(circle, #000 0%, transparent 45%); opacity: 0; transition: opacity .6s; animation: radDreh 24s linear infinite; pointer-events: none; }
+.oe-strahlen { position: fixed; left: 50%; top: 42%; width: 200vmax; height: 200vmax; transform: translate(-50%, -50%); background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--glow) 55%, transparent) 0deg 5deg, transparent 5deg 15deg); -webkit-mask: radial-gradient(circle, #000 0%, transparent 45%); mask: radial-gradient(circle, #000 0%, transparent 45%); opacity: 0; transition: opacity .6s; animation: radDreh 24s linear infinite; pointer-events: none; }
 .oeffnen.glueht:not([data-stufe="1"]):not([data-stufe="2"]) .oe-strahlen, .oeffnen.feier .oe-strahlen { opacity: .45; }
 .oeffnen.grossfeier .oe-strahlen { opacity: .85; animation-duration: 8s; }
 .oe-titel { position: relative; z-index: 2; margin-top: 16px; font: 700 1.1rem var(--f-display); color: var(--gold); min-height: 1.4em; }
-.oe-buehne { position: relative; z-index: 2; width: 100%; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 8px 16px; }
+.oe-buehne { position: relative; z-index: 2; width: 100%; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 8px 16px; }
 .oe-packplatz:empty, .oe-slot:empty, .oe-wurfplatz:empty { display: none; }
 .oe-slot { position: relative; }
 .oe-slot .karte { --b: min(300px, 64vw, calc((100vh - 330px) * .714)); }

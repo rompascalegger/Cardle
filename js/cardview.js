@@ -3,7 +3,7 @@ import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN } from './config.js';
 import { ELEMENTE, farbe, farbton, glyphSVG, beziehungen, faktorText } from './elements.js';
 import { ATTRIBUTE, attrIcon } from './attributes.js';
 import { EFFEKT } from './effects.js';
-import { ARTEN } from './species.js';
+import { ARTEN, FORMEN } from './species.js';
 import { monsterBild } from './monsterart.js';
 import { staerke, kosten, kartenSeltenheit, lookAnzahl, hatLook, seltenheitsChancen, pHolo, pEffekte, prozent, einsVon, plaetzeBelegt, plaetzeBringt, teamplatzMult } from './rules.js';
 
@@ -82,7 +82,7 @@ function infoRueckseite(c) {
   const elName = (v) => ELEMENTE[v].name;
   return `<div class="rs-info">
 <h4>${esc(art.name)}</h4>
-<div class="rs-sub2">${esc(ELEMENTE[el].name)} · ${esc(CONFIG.rollen[art.rolle].name)} · ${kl.name}</div>
+<div class="rs-sub2">${esc(ELEMENTE[el].name)} · ${esc(FORMEN[art.form] || '')} · ${esc(CONFIG.rollen[art.rolle].name)} · ${kl.name}</div>
 <div class="rs-attr">${ATTRIBUTE.map((a) => `<div>${attrIcon(a.key)}<span>${a.name}</span><b>${c.a[a.key]}</b></div>`).join('')}</div>
 ${zeile('Stärke / Leben', staerke(c.a))}${zeile('Beschwörung', kosten(c))}${zeile('Teamplätze', `${plaetzeBelegt(c)} belegt${plaetzeBringt(c) ? `, +${plaetzeBringt(c)}` : ''}`)}${zeile('Angriff ×', zahl(teamplatzMult(c.a.teamplatz)))}
 <div class="rs-h">Elementrad</div>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sprite-Werkstatt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+  <style>
+    .werkstatt { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; display: flex; flex-direction: column; gap: 16px; }
+    .kopf { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .kopf h1 { margin: 0; font-family: var(--f-display); }
+    .kopf a { color: var(--gold); margin-left: auto; }
+    #status .gut { color: var(--gut); } .warn { color: #ffb36b; }
+    .reiter { display: flex; gap: 6px; }
+    .reiter button { border: 1px solid var(--rand); background: var(--panel2); padding: 9px 16px; border-radius: 12px; cursor: pointer; font-weight: 800; }
+    .reiter button.an { background: linear-gradient(180deg, #ffe57a, #ffb347); color: #1a0f33; }
+    .schritte { margin: 0; padding-left: 20px; color: var(--leise); }
+    .schritte b { color: var(--text); }
+    .stil-box { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    textarea { width: 100%; background: rgba(0, 0, 0, .3); color: var(--text); border: 1px solid var(--rand); border-radius: 10px; padding: 8px 10px; font: 600 .85rem/1.4 var(--f-ui); resize: vertical; }
+    .leiste { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .leiste .rechts { margin-left: auto; color: var(--leise); }
+    .zeile { display: grid; grid-template-columns: 132px 132px 1fr auto; gap: 12px; align-items: center; padding: 10px; border-radius: 12px; background: rgba(0, 0, 0, .2); margin-bottom: 8px; }
+    .vorschau { position: relative; width: 132px; aspect-ratio: 220 / 160; border-radius: 10px; overflow: hidden; background: #000 center / cover; display: grid; place-items: center; }
+    .vorschau img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .vorschau.leer span { font-size: .72rem; color: rgba(255, 255, 255, .7); background: rgba(0, 0, 0, .5); padding: 3px 8px; border-radius: 8px; }
+    .vorschau.gross { width: 220px; }
+    .info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .info small { color: var(--leise); }
+    #drop { border: 2px dashed var(--rand); border-radius: 16px; padding: 30px; text-align: center; color: var(--leise); transition: .2s; }
+    #drop.an { border-color: var(--gold); background: rgba(255, 212, 71, .08); color: var(--text); }
+    .imp { display: grid; grid-template-columns: 220px 1fr auto; gap: 14px; align-items: center; padding: 10px; border-radius: 12px; background: rgba(0, 0, 0, .2); margin-bottom: 8px; border: 1px solid transparent; }
+    .imp.gespeichert { border-color: rgba(111, 227, 154, .5); }
+    .imp.fehler { border-color: rgba(255, 111, 140, .6); }
+    .imp-info { display: flex; flex-direction: column; gap: 6px; }
+    .imp-info input { width: 90px; background: var(--panel2); color: var(--text); border: 1px solid var(--rand); border-radius: 8px; padding: 5px 8px; font-weight: 800; }
+    .imp-status { color: var(--leise); font-size: .85rem; }
+    input[type=range] { accent-color: var(--gold); width: 140px; vertical-align: middle; }
+    .imp-knoepfe { display: flex; flex-direction: column; gap: 6px; }
+    @media (max-width: 760px) { .stil-box { grid-template-columns: 1fr; } .zeile { grid-template-columns: 1fr 1fr; } .zeile .info { grid-column: 1 / -1; } .imp { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="werkstatt">
+    <div class="kopf"><h1>Sprite-Werkstatt</h1><span id="status">lädt …</span><a href="../index.html">Zum Spiel</a></div>
+    <div class="reiter"><button class="an" data-tab="tab-prompts">1. Prompts</button><button data-tab="tab-import">2. Bilder importieren</button></div>
+
+    <section id="tab-prompts" class="tab">
+      <div class="panel">
+        <ol class="schritte">
+          <li><b>Stil festlegen</b>: Der Stil-Text steht vor jedem Prompt. Gleicher Stil heißt gleich aussehende Monster. Am besten zuerst 10 bis 20 Monster erzeugen, die besten als Stil-Referenz nehmen.</li>
+          <li><b>Prompts exportieren</b>: CSV für Tabellen, TXT mit einem Prompt pro Zeile für Stapel-Werkzeuge, JSON für Skripte.</li>
+          <li><b>Bilder erzeugen</b>: Jedes Monster auf weißem oder transparentem Hintergrund, Dateiname wie in der Spalte „datei“ (z. B. <code>007.png</code>) oder mit dem Monsternamen.</li>
+          <li><b>Importieren</b> im zweiten Reiter. Lizenz des Bildgenerators für die kommerzielle Nutzung prüfen.</li>
+        </ol>
+      </div>
+      <div class="panel stil-box">
+        <label><h4>Stil (vor jedem Prompt)</h4><textarea id="stil" rows="4"></textarea></label>
+        <label><h4>Negativ-Prompt</h4><textarea id="negativ" rows="4"></textarea></label>
+      </div>
+      <div class="panel">
+        <div class="leiste">
+          <select id="el-wahl"></select>
+          <label class="check"><input type="checkbox" id="nur-ohne"><span>nur ohne Bild</span></label>
+          <button class="btn klein" id="stil-reset">Stil zurücksetzen</button>
+          <span class="rechts" id="anzahl"></span>
+        </div>
+        <div class="leiste" style="margin-top:10px">
+          <button class="btn" id="dl-csv">prompts.csv</button>
+          <button class="btn" id="dl-txt">prompts.txt</button>
+          <button class="btn" id="dl-json">prompts.json</button>
+          <button class="btn primaer" id="ins-projekt">Alle drei in assets/monster/ speichern</button>
+        </div>
+      </div>
+      <div id="prompt-liste"></div>
+    </section>
+
+    <section id="tab-import" class="tab" hidden>
+      <div class="panel">
+        <div id="drop">Bilder hierher ziehen oder <label class="btn klein">auswählen<input type="file" id="datei-wahl" accept="image/*" multiple hidden></label>
+          <p class="leise">Die Nummer wird aus dem Dateinamen gelesen (<code>007.png</code>, <code>7_flammix.webp</code>) oder über den Monsternamen gefunden.</p>
+        </div>
+        <div class="leiste" style="margin-top:12px">
+          <label class="check"><input type="checkbox" id="entfernen" checked><span>einfarbigen Hintergrund entfernen</span></label>
+          <label class="check">Toleranz <input type="range" id="toleranz" min="5" max="90" value="38"></label>
+          <button class="btn primaer" id="alle-speichern" disabled>Alle speichern</button>
+        </div>
+      </div>
+      <div id="import-liste"></div>
+    </section>
+  </div>
+  <script type="module" src="werkstatt.js"></script>
+</body>
+</html>

@@ -8,7 +8,8 @@ import { Sound } from '../audio.js';
 import { staerke, kartenSeltenheit, ausfuehrungAusKey, staubBeimAbtragen, hatLook, lookAnzahl } from '../rules.js';
 import { h, modal, toast, ICON, fmt } from './dom.js';
 
-const filter = { el: -1, sort: 'nr', nurEntdeckt: false };
+const filter = { el: -1, sort: 'nr', nurEntdeckt: false, seite: 0 };
+const GRID_PRO_SEITE = 80;
 const LOOK_FARBEN = ['#7ad8ff', '#9a8cff', '#e8e8e8', '#5ffff0', '#ff9fcf'];
 
 export function staubHTML() {
@@ -19,7 +20,9 @@ export function sammlungScreen(root) {
   const wrap = h('section', { class: 'screen sammlung' });
   const kopf = h('div', { class: 'panel sm-kopf' });
   const grid = h('div', { class: 'sm-grid' });
-  wrap.append(kopf, grid);
+  const seitenOben = h('div', { class: 'seiten' });
+  const seitenUnten = h('div', { class: 'seiten' });
+  wrap.append(kopf, seitenOben, grid, seitenUnten);
   root.append(wrap);
 
   const zeichneKopf = () => {
@@ -31,11 +34,11 @@ export function sammlungScreen(root) {
       h('div', { class: 'sm-stats', html: `<h2>Sammlung</h2><span><b>${fmt(S.karten.length)}</b> Karten</span><span><b>${entdeckt}</b>/${ARTEN.length} Monster</span><span><b>${fmt(ausf)}</b> Ausführungen</span>` }),
       h('div', { class: 'staub-leiste', html: staubHTML() }),
       h('div', { class: 'sm-filter' },
-        h('select', { 'aria-label': 'Element', onchange: (e) => { filter.el = Number(e.target.value); zeichneGrid(); } },
+        h('select', { 'aria-label': 'Element', onchange: (e) => { filter.el = Number(e.target.value); filter.seite = 0; zeichneGrid(); } },
           h('option', { value: -1, text: 'Alle Elemente' }), ELEMENTE.map((el, i) => h('option', { value: i, selected: filter.el === i, text: el.name }))),
-        h('select', { 'aria-label': 'Sortierung', onchange: (e) => { filter.sort = e.target.value; zeichneGrid(); } },
+        h('select', { 'aria-label': 'Sortierung', onchange: (e) => { filter.sort = e.target.value; filter.seite = 0; zeichneGrid(); } },
           [['nr', 'Nummer'], ['seltenheit', 'Beste Seltenheit'], ['anzahl', 'Anzahl'], ['ausf', 'Ausführungen']].map(([v, t]) => h('option', { value: v, selected: filter.sort === v, text: t }))),
-        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: filter.nurEntdeckt, onchange: (e) => { filter.nurEntdeckt = e.target.checked; zeichneGrid(); } }), h('span', { text: 'nur entdeckte' }))),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: filter.nurEntdeckt, onchange: (e) => { filter.nurEntdeckt = e.target.checked; filter.seite = 0; zeichneGrid(); } }), h('span', { text: 'nur entdeckte' }))),
     );
   };
   const zeichneGrid = () => {
@@ -44,7 +47,16 @@ export function sammlungScreen(root) {
     if (filter.nurEntdeckt) arten = arten.filter((a) => st(a)?.anzahl);
     const key = { nr: () => 0, seltenheit: (a) => -(st(a)?.besteWert ?? -1), anzahl: (a) => -(st(a)?.anzahl || 0), ausf: (a) => -(st(a)?.ausf.size || 0) }[filter.sort];
     arten.sort((a, b) => key(a) - key(b) || a.id - b.id);
-    grid.replaceChildren(...arten.map((a) => kachel(a)));
+    const seiten = Math.max(1, Math.ceil(arten.length / GRID_PRO_SEITE));
+    filter.seite = Math.max(0, Math.min(filter.seite, seiten - 1));
+    grid.replaceChildren(...arten.slice(filter.seite * GRID_PRO_SEITE, (filter.seite + 1) * GRID_PRO_SEITE).map((a) => kachel(a)));
+    const leiste = () => (seiten > 1 ? [
+      h('button', { class: 'btn klein', disabled: filter.seite === 0, text: '‹', onclick: () => { filter.seite--; zeichneGrid(); } }),
+      h('span', { text: `Seite ${filter.seite + 1} / ${seiten} · ${arten.length} Monster` }),
+      h('button', { class: 'btn klein', disabled: filter.seite >= seiten - 1, text: '›', onclick: () => { filter.seite++; zeichneGrid(); } }),
+    ] : []);
+    seitenOben.replaceChildren(...leiste());
+    seitenUnten.replaceChildren(...leiste());
   };
   const kachel = (a) => {
     const s = S.stapel.get(a.id);

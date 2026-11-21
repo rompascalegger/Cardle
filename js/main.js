@@ -11,6 +11,7 @@ import { teamScreen } from './ui/team.js';
 import { kampagneScreen, kampfScreen } from './ui/kampagne.js';
 import { radScreen } from './ui/rad.js';
 import { einstellungen } from './ui/einst.js';
+import { ladeSprites } from './sprites.js';
 import { galerieScreen } from './ui/galerie.js';
 
 const SCREENS = {
@@ -74,7 +75,7 @@ async function start() {
   document.querySelector('.logo-text').textContent = CONFIG.spielname.toUpperCase();
   initTexturen();
   initTooltip();
-  await laden();
+  await Promise.all([laden(), ladeSprites()]);
   setzeBewegung(S.d.einst.bewegung);
   einstellen(S.d.einst.lautstaerke, S.d.einst.stumm);
   kopfleiste();
@@ -83,6 +84,10 @@ async function start() {
   addEventListener('keydown', entsperrer);
   addEventListener('beforeunload', () => { if (S.dirty) speichern(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.dirty) speichern(); });
+  addEventListener('hashchange', () => {
+    const z = location.hash.slice(1);
+    if (SCREENS[z] && z !== aktuellName && z !== 'kampf' && !document.querySelector('.oeffnen')) nav(z);
+  });
   const ziel = (location.hash || '').slice(1).split('?')[0];
   nav(SCREENS[ziel] && ziel !== 'kampf' ? ziel : 'packs');
   document.getElementById('lade').remove();

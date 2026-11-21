@@ -1,18 +1,21 @@
 // Auto-Öffnen gegen Münzen. [FEST 11.3] je schneller, desto teurer. [VORSCHLAG] Tempostufen und Auto-Stopp.
 import { CONFIG, KLASSEN } from '../config.js';
-import { S, packOeffnen, aenderung, speichernBald } from '../state.js';
+import { S, packOeffnen, aenderung, speichernBald, speichernSpaetestens } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { Sound } from '../audio.js';
 import { ARTEN } from '../species.js';
 import { h, toast, ICON, fmt } from './dom.js';
 import { zeremonie } from './packs.js';
 
-const STANDARD_STOPP = { neuArt: true, neuAusf: false, holo: true, effekt: true, klasseAb: 5, stufeAb: 4 };
+// [VORSCHLAG 11.3] Auto-Stopp. "Neues Monster" ist ab Werk aus: Bei 640 Arten wäre fast jedes Pack ein Stopp.
+const STANDARD_STOPP = { neuArt: false, neuAusf: false, holo: true, effekt: true, klasseAb: 5, stufeAb: 4 };
+const STOPP_VERSION = 2;
 let lauf = null; // läuft über Bildschirmwechsel hinweg nicht weiter
 
 export function autoScreen(root) {
   const einst = S.d.einst;
   einst.autoTempo ??= 0;
+  if (einst.autoStoppV !== STOPP_VERSION) { einst.autoStopp = { ...STANDARD_STOPP }; einst.autoStoppV = STOPP_VERSION; }
   einst.autoStopp = Object.assign({}, STANDARD_STOPP, einst.autoStopp || {});
   const st = einst.autoStopp;
   const sitzung = { packs: 0, karten: 0, muenzen: 0, beste: 0, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), feed: [] };
@@ -96,14 +99,16 @@ export function autoScreen(root) {
   };
 
   let uiTimer = 0;
-  const schritt = (t) => {
+  // Taktgeber nach echter Zeit (nicht nach Bildschirm-Frames), damit das Tempo stimmt, auch im Hintergrund.
+  const schritt = () => {
     if (!lauf) return;
-    const dt = Math.min(0.25, (t - lauf.t) / 1000);
+    const t = performance.now();
+    const dt = Math.min(5, (t - lauf.t) / 1000);
     lauf.t = t;
     const tempo = CONFIG.autoOeffnen.stufen[einst.autoTempo];
     lauf.faellig += dt * tempo.packsProSekunde;
     let geoeffnet = 0;
-    while (lauf && lauf.faellig >= 1 && geoeffnet < 50) {
+    while (lauf && lauf.faellig >= 1 && geoeffnet < 200) {
       lauf.faellig -= 1;
       const p = preis(einst.autoTempo);
       if (S.d.muenzen < p) { stoppe(); toast('Keine Münzen mehr für das Auto-Öffnen.'); break; }
@@ -125,12 +130,12 @@ export function autoScreen(root) {
       const grund = pruefeStopp(pack);
       if (grund) { stoppe(); zeichne(); zeichneFeed(); aenderung('auto'); speichernBald(300); stoppZeremonie(pack, grund); return; }
     }
-    if (geoeffnet) { aenderung('auto'); speichernBald(3000); }
-    if (t - uiTimer > 120) { uiTimer = t; zeichne(); if (geoeffnet) zeichneFeed(); }
-    if (lauf) lauf.raf = requestAnimationFrame(schritt);
+    if (geoeffnet) { aenderung('auto'); speichernSpaetestens(3000); }
+    if (t - uiTimer > 120 && !document.hidden) { uiTimer = t; zeichne(); if (geoeffnet) zeichneFeed(); }
   };
   let flugZaehler = 0;
   const fliegePack = () => {
+    if (document.hidden) return;
     if (++flugZaehler % Math.max(1, Math.round(CONFIG.autoOeffnen.stufen[einst.autoTempo].packsProSekunde / 4)) !== 0) return;
     const p = h('i', { class: 'flug-pack', html: ICON.pack });
     band.append(p);
@@ -138,20 +143,20 @@ export function autoScreen(root) {
     setTimeout(() => p.remove(), 1200);
   };
   const stoppZeremonie = async (pack, grund) => {
-    const weiter = await zeremonie(pack, { titel: 'Auto-Stopp: ' + grund, ausAuto: true });
+    const weiter = await zeremonie(pack, { titel: 'Auto-Stopp: ' + grund, ausAuto: true, auto: true });
     zeichne();
     if (weiter === 'weiter' && wrap.isConnected) starte();
   };
   const starte = () => {
     if (lauf) return;
     if (S.d.muenzen < preis(einst.autoTempo)) { toast('Nicht genug Münzen für dieses Tempo.'); return; }
-    lauf = { t: performance.now(), faellig: 1, raf: 0 };
-    lauf.raf = requestAnimationFrame(schritt);
+    lauf = { t: performance.now(), faellig: 1, timer: setInterval(schritt, 50) };
+    schritt();
     zeichne();
   };
   const stoppe = () => {
     if (!lauf) return;
-    cancelAnimationFrame(lauf.raf);
+    clearInterval(lauf.timer);
     lauf = null;
     zeichne();
     speichernBald(200);

@@ -3,6 +3,7 @@
 // Ausgabe: zwei Bilder (Hintergrund, Monster) als data-URL, damit Holo-Schichten dazwischen liegen können.
 import { seeded } from './rng.js';
 import { ARTEN } from './species.js';
+import { spriteUrl } from './sprites.js';
 
 const PAL = [ // Körper, dunkel, Bauch, Akzent, Iris, Hintergrund oben, Hintergrund unten
   ['#ff7a2f', '#c2361a', '#ffd36b', '#ffe14d', '#ffcf3f', '#3a0c06', '#b8400f'],
@@ -46,6 +47,45 @@ const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex(A.map((v, i)
 const hell = (c, t) => mix(c, '#ffffff', t);
 const dunkel = (c, t) => mix(c, '#000000', t);
 const f1 = (n) => Math.round(n * 10) / 10;
+function zuHsl(hex) {
+  let [r, g, b] = hx(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+function ausHsl(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return toHex([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+}
+const dreheFarbe = (hex, dh, dl = 0, ds = 0) => { const [h, s, l] = zuHsl(hex); return ausHsl(h + dh, s + ds, l + dl); };
+const IRIS = ['#ffcf3f', '#3fd0ff', '#7aff6b', '#ff5fa2', '#b46bff', '#ff8a2a', '#5ffff0', '#ff3b5c'];
+
+// Farbvariante je Art, damit sich die 20 Monster eines Elements unterscheiden. Element bleibt erkennbar.
+function variiere(P0, r, form) {
+  const P = { ...P0 };
+  const v = r.int(0, 9);
+  let dh = 0, dl = 0;
+  if (v === 1) dh = 16 + r.int(0, 14);
+  else if (v === 2) dh = -(16 + r.int(0, 14));
+  else if (v === 3) dh = 36 + r.int(0, 22);
+  else if (v === 4) dh = -(36 + r.int(0, 22));
+  else if (v === 5) dl = 0.1;
+  else if (v === 6) dl = -0.1;
+  if (v === 7) { const b = P.body; P.body = mix(P.acc, P.body, 0.3); P.dark = dunkel(P.body, 0.38); P.acc = b; }
+  else if (dh || dl) { P.body = dreheFarbe(P.body, dh, dl); P.dark = dreheFarbe(P.dark, dh, dl * 0.7); P.belly = dreheFarbe(P.belly, dh * 0.5, dl * 0.5); }
+  if (r.chance(0.4)) P.iris = r.pick(IRIS);
+  if (form === 3) P.acc = hell(P.acc, 0.1);
+  P.O = dunkel(P.dark, 0.55); P.hi = hell(P.body, 0.45);
+  return P;
+}
 
 export function palette(el) {
   const [body, dark, belly, acc, iris, bg1, bg2] = PAL[el];
@@ -158,7 +198,10 @@ function koerper(bp, r, P) {
 // ---------- Augen und Mund ----------
 function augen(A, stil, P) {
   const O = P.O, out = [];
-  const { eyeX: x0, eyeY: y, gap, eyeR: er } = A;
+  const { eyeX: x0, eyeY: y, gap } = A;
+  let er = A.eyeR;
+  if (stil === 'gross') { er *= 1.24; stil = 'rund'; }
+  if (stil === 'klein') { er *= 0.74; stil = 'klein'; }
   const pos = stil === 'zyklop' ? [[x0, er * 1.45]] : stil === 'drei' ? [[x0 - gap, er], [x0 + gap, er], [x0, er * 0.7, -er * 1.9]] : [[x0 - gap, er], [x0 + gap, er]];
   if (stil === 'visier') {
     const w = gap + er * 1.6;
@@ -174,8 +217,13 @@ function augen(A, stil, P) {
       return;
     }
     out.push(ell(x, yy, rr, rr * 1.08, '#fff', `stroke="${O}" stroke-width="2.2"`));
-    out.push(kreis(x + rr * 0.08, yy + rr * 0.12, rr * 0.66, 'url(#ir)'));
-    out.push(kreis(x + rr * 0.1, yy + rr * 0.16, rr * 0.33, '#120a18'));
+    if (stil === 'katze') {
+      out.push(kreis(x + rr * 0.05, yy + rr * 0.08, rr * 0.8, 'url(#ir)'));
+      out.push(ell(x + rr * 0.05, yy + rr * 0.08, rr * 0.14, rr * 0.58, '#120a18'));
+    } else {
+      out.push(kreis(x + rr * 0.08, yy + rr * 0.12, rr * (stil === 'klein' ? 0.72 : 0.66), 'url(#ir)'));
+      out.push(kreis(x + rr * 0.1, yy + rr * 0.16, rr * (stil === 'klein' ? 0.42 : 0.33), '#120a18'));
+    }
     out.push(kreis(x - rr * 0.2, yy - rr * 0.22, rr * 0.24, '#fff'), kreis(x + rr * 0.32, yy + rr * 0.38, rr * 0.11, '#fff', 'opacity=".85"'));
     out.push(`<ellipse class="lid" cx="${f1(x)}" cy="${f1(yy)}" rx="${f1(rr + 1.4)}" ry="${f1(rr * 1.08 + 1.4)}" fill="${P.body}" stroke="${O}" stroke-width="2.2"/>`);
     const links = x < x0 || (pos.length === 1 && false);
@@ -208,6 +256,8 @@ function kopfschmuck(A, typ, P) {
     case 'ohren': return [l, rr].map((p, i) => { const s = i ? 1 : -1; return `<path d="M${f1(p.x - 9 * s)},${f1(p.y + 8)} L${f1(p.x + 5 * s)},${f1(p.y - 18)} L${f1(p.x + 12 * s)},${f1(p.y + 6)}Z" fill="url(#kb)" ${S}/><path d="M${f1(p.x - 3 * s)},${f1(p.y + 5)} L${f1(p.x + 5 * s)},${f1(p.y - 10)} L${f1(p.x + 8 * s)},${f1(p.y + 4)}Z" fill="#ff9fbf" opacity=".8"/>`; }).join('');
     case 'hoerner': return [l, rr].map((p, i) => { const s = i ? 1 : -1; return `<path d="M${f1(p.x)},${f1(p.y + 6)} C${f1(p.x + 4 * s)},${f1(p.y - 10)} ${f1(p.x + 14 * s)},${f1(p.y - 16)} ${f1(p.x + 18 * s)},${f1(p.y - 26)} C${f1(p.x + 18 * s)},${f1(p.y - 10)} ${f1(p.x + 12 * s)},${f1(p.y)} ${f1(p.x + 8 * s)},${f1(p.y + 8)}Z" fill="${hell(P.acc, 0.2)}" ${S}/>`; }).join('');
     case 'antennen': return [l, rr].map((p, i) => { const s = i ? 1 : -1; return `<path d="M${f1(p.x + 4 * s)},${f1(p.y + 4)} Q${f1(p.x + 2 * s)},${f1(p.y - 14)} ${f1(p.x + 12 * s)},${f1(p.y - 22)}" fill="none" stroke="${O}" stroke-width="2.6" stroke-linecap="round"/>${kreis(p.x + 12 * s, p.y - 22, 4.5, P.acc, S)}`; }).join('');
+    case 'rundohren': return [l, rr].map((p) => `${kreis(p.x, p.y - 4, 9, 'url(#kb)', S)}${kreis(p.x, p.y - 4, 4.6, '#ff9fbf', 'opacity=".75"')}`).join('');
+    case 'flossen': return [l, rr].map((p, i) => { const s = i ? 1 : -1; return `<path d="M${f1(p.x)},${f1(p.y + 8)} C${f1(p.x + 6 * s)},${f1(p.y - 6)} ${f1(p.x + 20 * s)},${f1(p.y - 12)} ${f1(p.x + 24 * s)},${f1(p.y - 4)} C${f1(p.x + 18 * s)},${f1(p.y)} ${f1(p.x + 16 * s)},${f1(p.y + 6)} ${f1(p.x + 8 * s)},${f1(p.y + 10)}Z" fill="${P.acc}" ${S}/><path d="M${f1(p.x + 6 * s)},${f1(p.y + 4)} L${f1(p.x + 18 * s)},${f1(p.y - 4)}" stroke="${O}" stroke-width="1.2" opacity=".5"/>`; }).join('');
     case 'buschel': return `<path d="M${f1(A.krone.x - 10)},${f1(A.krone.y + 4)} Q${f1(A.krone.x - 8)},${f1(A.krone.y - 14)} ${f1(A.krone.x)},${f1(A.krone.y - 18)} Q${f1(A.krone.x + 2)},${f1(A.krone.y - 8)} ${f1(A.krone.x + 6)},${f1(A.krone.y - 16)} Q${f1(A.krone.x + 12)},${f1(A.krone.y - 6)} ${f1(A.krone.x + 10)},${f1(A.krone.y + 4)}Z" fill="url(#kb)" ${S}/>`;
     default: return '';
   }
@@ -491,40 +541,140 @@ function defs(P) {
 </defs>`;
 }
 
+// Farbname auf Englisch (für Bild-Prompts)
+export function farbName(hex) {
+  const [h, s, l] = zuHsl(hex);
+  if (l > 0.93) return 'white';
+  if (l < 0.09) return 'black';
+  if (s < 0.13) return l > 0.65 ? 'light gray' : l < 0.3 ? 'charcoal gray' : 'gray';
+  const namen = [[14, 'red'], [38, 'orange'], [50, 'golden yellow'], [66, 'yellow'], [88, 'lime green'], [150, 'green'], [172, 'teal'], [194, 'cyan'], [215, 'sky blue'], [240, 'blue'], [262, 'indigo'], [285, 'violet'], [312, 'purple'], [336, 'magenta'], [352, 'pink'], [361, 'red']];
+  let n = namen.find(([g]) => h < g)[1];
+  if (n === 'orange' && l < 0.38) n = 'brown';
+  if ((n === 'golden yellow' || n === 'yellow') && l < 0.35) n = 'olive brown';
+  if (['red', 'pink', 'magenta'].includes(n) && l > 0.78) n = 'pastel pink';
+  const vor = l > 0.8 ? 'pale ' : l > 0.64 ? 'light ' : l < 0.22 ? 'very dark ' : l < 0.36 ? 'dark ' : '';
+  return vor + n;
+}
+export const monsterMerkmale = (artId) => monsterBild(artId, false).merkmale;
+
 const svgUrl = (s) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
 const CACHE = new Map();
 
-const AUGEN_STILE = ['rund', 'rund', 'boese', 'muede', 'rund', 'zyklop', 'boese'];
-const MUENDER = ['laecheln', 'zahn', 'offen', 'laecheln', 'zahn', 'zickzack', 'keiner'];
-const KOPF = ['ohren', 'hoerner', 'antennen', 'buschel', 'keiner'];
+const AUGEN_STILE = ['rund', 'rund', 'boese', 'muede', 'zyklop', 'katze', 'gross', 'klein', 'boese', 'katze', 'gross', 'drei'];
+const MUENDER = ['laecheln', 'zahn', 'offen', 'laecheln', 'zahn', 'zickzack', 'keiner', 'offen'];
+const OHREN_TYPEN = ['ohren', 'hoerner', 'antennen', 'rundohren', 'flossen'];
+const MUSTER = ['keins', 'keins', 'punkte', 'streifen', 'flecken', 'sterne', 'rauten'];
+const SCHWANZ_TYPEN = ['pfeil', 'kugel', 'buschel', 'blatt'];
+const SCHWANZ_BELEGT = new Set([0, 6, 8, 10, 14]); // Element-Schmuck nutzt den Schwanz schon
+const OHREN_BELEGT = new Set([8, 14, 25]); // Element-Schmuck nutzt die Ohren schon
+const FORM_SKALA = [0.82, 0.92, 1, 1.04];
+
+// Bereich, in dem das Körpermuster liegt (passend zu A.pfad)
+function musterBox(bp, A) {
+  switch (bp) {
+    case 'zweibeiner': return { x: 110, y: A.eyeY - 2, rx: A.kopfR, ry: A.kopfR };
+    case 'vierbeiner': return { x: 120, y: 106, rx: 46, ry: 25 };
+    case 'schlange': return { x: 110, y: 64, rx: 28, ry: 23 };
+    case 'humanoid': return { x: 110, y: 104, rx: 24, ry: 24 };
+    default: return { x: 110, y: A.cy, rx: A.rx, ry: A.ry };
+  }
+}
+function muster(typ, box, P, r) {
+  if (typ === 'keins') return '';
+  const c1 = dunkel(P.body, 0.32), c2 = hell(P.body, 0.5);
+  const { x: bx, y: by, rx, ry } = box;
+  let inhalt = '';
+  if (typ === 'punkte') for (let i = 0; i < 8; i++) inhalt += kreis(bx - rx * 0.85 + r.next() * rx * 1.7, by - ry * 0.95 + r.next() * ry * 1.5, 2.2 + r.next() * 3, c1, 'opacity=".45"');
+  else if (typ === 'streifen') for (let i = 0; i < 3; i++) { const y = by - ry * 0.75 + i * ry * 0.42; inhalt += `<path d="M${f1(bx - rx * 1.1)},${f1(y)} Q${f1(bx)},${f1(y - 10)} ${f1(bx + rx * 1.1)},${f1(y)}" fill="none" stroke="${c1}" stroke-width="5" opacity=".4" stroke-linecap="round"/>`; }
+  else if (typ === 'flecken') for (let i = 0; i < 3; i++) inhalt += ell(bx - rx * 0.6 + r.next() * rx * 1.2, by - ry * 0.75 + r.next() * ry * 1.1, 6 + r.next() * 7, 5 + r.next() * 5, c1, 'opacity=".35"');
+  else if (typ === 'sterne') for (let i = 0; i < 5; i++) inhalt += stern(bx - rx * 0.75 + r.next() * rx * 1.5, by - ry * 0.85 + r.next() * ry * 1.3, 2.6 + r.next() * 2.2, c2);
+  else if (typ === 'rauten') for (let i = 0; i < 4; i++) { const x = bx - rx * 0.6 + i * rx * 0.4; inhalt += `<path d="M${f1(x)},${f1(by - ry * 0.75)} l5,7 -5,7 -5,-7z" fill="${c2}" opacity=".55"/>`; }
+  return `<g clip-path="url(#kp)">${inhalt}</g>`;
+}
+function schwanz(A, typ, P, bp) {
+  if (A.schwebt) return '';
+  const O = P.O, S = `stroke="${O}" stroke-width="2.2" stroke-linejoin="round"`;
+  let { x, y } = A.schwanz, basis = '';
+  if (bp === 'blob' || bp === 'flieger' || bp === 'humanoid') {
+    const sx = x - 6, sy = y, ex = x + 22, ey = y - 22;
+    const d = `M${f1(sx)},${f1(sy)} Q${f1(x + 22)},${f1(y + 6)} ${f1(ex)},${f1(ey)}`;
+    basis = `<path d="${d}" fill="none" stroke="${O}" stroke-width="11" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${P.body}" stroke-width="6.5" stroke-linecap="round"/>`;
+    x = ex; y = ey;
+  }
+  let spitze = '';
+  if (typ === 'pfeil') spitze = `<path d="M${f1(x - 8)},${f1(y + 4)} L${f1(x + 1)},${f1(y - 12)} L${f1(x + 10)},${f1(y + 4)} L${f1(x + 1)},${f1(y)}Z" fill="${P.acc}" ${S}/>`;
+  else if (typ === 'kugel') spitze = kreis(x, y, 6.5, P.acc, S) + kreis(x - 2, y - 2, 2, '#fff', 'opacity=".7"');
+  else if (typ === 'buschel') spitze = [[-6, -4], [0, -9], [6, -4]].map(([dx, dy]) => ell(x + dx, y + dy, 4.2, 7, P.belly, `${S} transform="rotate(${dx * 5} ${f1(x + dx)} ${f1(y + dy)})"`)).join('');
+  else if (typ === 'blatt') spitze = blatt(x, y + 4, 0.55, 30, P.acc, O);
+  return basis + spitze;
+}
+function stacheln(A, P) {
+  const k = A.krone, rk = A.ruecken, O = P.O;
+  const cy = A.cy ?? 100;
+  let out = '';
+  for (let i = 0; i < 4; i++) {
+    const t = 0.25 + i * 0.22;
+    const x = k.x + (rk.x - k.x) * t, y = k.y + (rk.y - k.y) * t + 4;
+    const dx = x - A.cx, dy = y - cy, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len, px = -uy, py = ux;
+    const hh = 11 - i * 1.3, w = 5;
+    out += `<path d="M${f1(x + px * w)},${f1(y + py * w)} L${f1(x + ux * hh)},${f1(y + uy * hh)} L${f1(x - px * w)},${f1(y - py * w)}Z" fill="${hell(P.acc, 0.1)}" stroke="${O}" stroke-width="2" stroke-linejoin="round"/>`;
+  }
+  return out;
+}
+function aura(A, P, r) {
+  const cy = A.cy ?? 100;
+  let s = ell(110, cy, A.rx + 34, A.ry + 28, P.acc, 'opacity=".2" filter="url(#gl)"');
+  s += `<ellipse cx="110" cy="${f1(cy)}" rx="${f1(A.rx + 30)}" ry="${f1(A.ry + 24)}" fill="none" stroke="${P.acc}" stroke-width="1.6" stroke-dasharray="3 6" opacity=".6"/>`;
+  for (let i = 0; i < 4; i++) { const a = r.next() * Math.PI * 2; s += stern(110 + Math.cos(a) * (A.rx + 30), cy + Math.sin(a) * (A.ry + 24), 3 + r.next() * 2, '#fff', 'tw'); }
+  return s;
+}
 
 export function monsterBild(artId, animiert = true) {
   const key = artId + (animiert ? 'a' : 's');
   if (CACHE.has(key)) return CACHE.get(key);
   const art = ARTEN[artId];
   const el = art.el;
-  const P = palette(el);
+  const form = art.form ?? 2;
   const r = seeded(art.kunstSeed);
+  const P = variiere(palette(el), r, form);
   const bp = art.bauplan;
   const { back, body, A } = koerper(bp, r, P);
   const deko = schmuck(el, A, P, r, bp);
+  // Mehr Vielfalt: Nicht jede Art trägt den vollen Element-Schmuck. Farbe, Hintergrund und Siegel halten das Element erkennbar.
+  if (deko.top.length && r.chance(0.32)) { deko.top = []; deko.krone = false; }
+  if (deko.back.length && r.chance(0.2)) deko.back = [];
+  if (deko.front.length > 2 && r.chance(0.3)) deko.front = deko.front.slice(0, Math.ceil(deko.front.length / 2));
   let augenStil = deko.augenStil || r.pick(AUGEN_STILE);
+  if (form === 0 && ['rund', 'klein', 'boese', 'muede'].includes(augenStil)) augenStil = 'gross';
   let mundStil = bp === 'flieger' && r.chance(0.5) ? 'schnabel' : r.pick(MUENDER);
+  if (form === 0 && ['zahn', 'zickzack', 'keiner'].includes(mundStil)) mundStil = 'laecheln';
   if (augenStil === 'visier' && mundStil === 'offen') mundStil = 'zickzack';
-  const kopf = deko.krone ? 'keiner' : r.pick(KOPF);
-  const backen = r.chance(0.55) && augenStil !== 'visier' && augenStil !== 'gluehend'
+  let kopf = 'keiner';
+  if (!OHREN_BELEGT.has(el)) {
+    if (!deko.krone) kopf = r.pick([...OHREN_TYPEN, 'buschel', 'keiner']);
+    else if (r.chance(form === 3 ? 0.7 : 0.45)) kopf = form === 3 && r.chance(0.5) ? 'hoerner' : r.pick(OHREN_TYPEN);
+  }
+  const musterTyp = r.pick(MUSTER);
+  const schwanzTyp = !SCHWANZ_BELEGT.has(el) && r.chance(bp === 'humanoid' ? 0.25 : 0.55) ? r.pick(SCHWANZ_TYPEN) : null;
+  const mitStacheln = form > 0 && r.chance(form === 3 ? 0.5 : 0.28);
+  const backen = (form === 0 || r.chance(0.5)) && augenStil !== 'visier' && augenStil !== 'gluehend'
     ? ell(A.eyeX - A.gap * 1.55, A.eyeY + A.eyeR * 1.5, A.eyeR * 0.65, A.eyeR * 0.38, '#ff6b9a', 'opacity=".4"') + ell(A.eyeX + A.gap * 1.55, A.eyeY + A.eyeR * 1.5, A.eyeR * 0.65, A.eyeR * 0.38, '#ff6b9a', 'opacity=".4"')
     : '';
-  const schatten = ell(110, A.boden, A.schwebt ? 34 : 48, A.schwebt ? 5 : 7, '#000', `opacity="${A.schwebt ? 0.22 : 0.32}" filter="url(#sch)"`);
-  const fg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160">${defs(P)}${animiert ? STIL_ANIM : STIL_STATISCH}
-${schatten}<g class="m${A.schwebt ? ' schwebt' : ''}">
+  const sk = FORM_SKALA[form] * (0.97 + r.next() * 0.06);
+  const sy = 0.96 + r.next() * 0.08;
+  const schatten = ell(110, A.boden, (A.schwebt ? 34 : 48) * sk, (A.schwebt ? 5 : 7) * sk, '#000', `opacity="${A.schwebt ? 0.22 : 0.32}" filter="url(#sch)"`);
+  const fg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160">${defs(P)}<defs><clipPath id="kp"><path d="${A.pfad}"/></clipPath></defs>${animiert ? STIL_ANIM : STIL_STATISCH}
+${schatten}<g class="m${A.schwebt ? ' schwebt' : ''}"><g transform="translate(110 ${f1(A.boden)}) scale(${sk.toFixed(3)} ${(sk * sy).toFixed(3)}) translate(-110 ${f1(-A.boden)})">
+${form === 3 ? `<g>${aura(A, P, r)}</g>` : ''}
 <g>${deko.back.join('')}</g>
+<g>${mitStacheln ? stacheln(A, P) : ''}${schwanzTyp ? schwanz(A, schwanzTyp, P, bp) : ''}</g>
 <g>${back.join('')}</g>
-<g opacity="${deko.koerperOpacity}">${body.join('')}</g>
+<g opacity="${deko.koerperOpacity}">${body.join('')}${muster(musterTyp, musterBox(bp, A), P, r)}</g>
 <g>${kopfschmuck(A, kopf, P)}${deko.top.join('')}</g>
 <g>${backen}${augen(A, augenStil, P)}${mund(A, mundStil, P)}</g>
 <g>${deko.front.join('')}</g>
-</g></svg>`;
+</g></g></svg>`;
   const rb = seeded(art.kunstSeed + '-bg');
   const bg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160" preserveAspectRatio="xMidYMid slice">${defs(P)}${animiert ? STIL_ANIM : STIL_STATISCH}
 <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.bg1}"/><stop offset="1" stop-color="${P.bg2}"/></linearGradient>
@@ -532,7 +682,10 @@ ${schatten}<g class="m${A.schwebt ? ' schwebt' : ''}">
 <radialGradient id="vig" cx="50%" cy="50%" r="75%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient></defs>
 <rect width="220" height="160" fill="url(#hg)"/>${hintergrund(el, rb, P)}<rect width="220" height="160" fill="url(#spot)"/><rect width="220" height="160" fill="url(#vig)"/></svg>`;
   const ohneAnim = (s) => (animiert ? s : s.replace(/<animateTransform[^>]*\/>/g, ''));
-  const res = { fg: svgUrl(ohneAnim(fg)), bg: svgUrl(ohneAnim(bg)), fgRoh: fg };
+  const merkmale = { augen: augenStil, mund: mundStil, kopf, muster: musterTyp, schwanz: schwanzTyp, stacheln: mitStacheln, elementSchmuck: deko.top.length > 0, P };
+  // Importierter Sprite ersetzt die generierte Figur, der Element-Hintergrund bleibt.
+  const sprite = spriteUrl(artId);
+  const res = { fg: sprite || svgUrl(ohneAnim(fg)), bg: svgUrl(ohneAnim(bg)), fgGeneriert: svgUrl(ohneAnim(fg)), sprite: !!sprite, merkmale };
   CACHE.set(key, res);
   return res;
 }

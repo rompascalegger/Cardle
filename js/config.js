@@ -148,7 +148,7 @@ export const CONFIG = {
   },
 
   monster: {
-    artenProElement: 3, // [OFFEN] Anzahl der Monster, Platzhalter: 3 je Element = 96
+    artenProElement: 20, // [FEST seit 21.11.2026] 20 Monster je Element = 640. Namen und Kunst bleiben [OFFEN] Platzhalter.
   },
 
   // [OFFEN 3] Ob die Zahl neben dem Symbol steht. Platzhalter: ja.

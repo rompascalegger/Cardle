@@ -4,8 +4,8 @@
     {
       "name": "cardle",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8140"],
-      "port": 8140
+      "runtimeArgs": ["tools/serve.py", "8141"],
+      "port": 8141
     }
   ]
 }

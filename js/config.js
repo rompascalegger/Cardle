@@ -102,6 +102,8 @@ export const CONFIG = {
     sparenOhneGrenze: true, // [FEST]
     spielerLeben: 5, // [FEST]
     teamGrundplaetze: 10, // [VORSCHLAG]
+    // Kostenkurve für automatische Teams (aus der Balance-Simulation): je Kostenstufe so viele Karten zuerst
+    teamKurve: [{ bis: 10, anzahl: 3 }, { bis: 20, anzahl: 3 }, { bis: 40, anzahl: 2 }],
     // [OFFEN] Teamplatz: wie der Multiplikator entsteht. Platzhalter: 1 + 0,2 je Punkt, belegt max(1, Teamplatz) Plätze.
     teamplatzMultProPunkt: 0.2,
     teamplatzMinPlaetze: 1,
@@ -184,6 +186,8 @@ export const CONFIG = {
     weltBelohnung: (w) => ({ gluecks: 2 + Math.floor(w / 4), element: 2, muenzen: 20000 + 2000 * w }),
   },
 
+  // [Nutzer, 21.11.2026] Erfolgspack: eins je Erfolg zum Abholen, 10 Karten, seltene Chancen ×5
+  erfolgsPack: { karten: 10, faktor: 5 },
   // Elementpack: 10 Karten nur aus dem Element einer Dimension, seltene Chancen ×3
   elementPack: { karten: 10, faktor: 3 },
 

@@ -14,19 +14,19 @@ import { karteVergroessern } from './lupe.js';
 const KLASSEN_FARBEN = ['#d4935a', '#dfe5ea', '#ffd23f', '#cfe6f2', '#3ee08f', '#ff4f72', '#4f8dff', '#e8f6ff'];
 const zufallsArt = () => Math.floor(Math.random() * ARTEN.length);
 
-export function packElement(artId = zufallsArt(), { gluecks = false, element = null } = {}) {
+export function packElement(artId = zufallsArt(), { gluecks = false, element = null, erfolg = false } = {}) {
   if (element != null) { const pool = ARTEN.filter((a) => a.el === element && !a.silber); artId = pool[Math.floor(Math.random() * pool.length)].id; }
   const bild = monsterBild(artId, true);
   const el = ARTEN[artId].el;
   return h('div', {
-    class: 'pack' + (gluecks ? ' gluecks' : '') + (element != null ? ' elementpack' : ''), 'data-art': artId, style: `--ph:${gluecks ? 45 : farbton(el).toFixed(0)}`, html: `
+    class: 'pack' + (gluecks ? ' gluecks' : '') + (erfolg ? ' erfolgspack' : '') + (element != null ? ' elementpack' : ''), 'data-art': artId, style: `--ph:${gluecks ? 45 : farbton(el).toFixed(0)}`, html: `
 <div class="pack-koerper">
   <div class="pack-folie"></div>
   <div class="pack-rad"></div>
   <img class="pack-motiv" src="${bild.fg}" alt="" draggable="false">
   <div class="pack-logo">${esc(CONFIG.spielname.toUpperCase())}</div>
-  <div class="pack-unter">${gluecks ? `GLÜCKSPACK · ${CONFIG.gluecksPack.karten} KARTEN` : element != null ? `ELEMENTPACK · ${CONFIG.elementPack.karten} KARTEN` : `BOOSTER · ${CONFIG.packGroesse} KARTEN`}</div>
-  <div class="pack-el">${gluecks ? `★ alle Chancen ×${CONFIG.gluecksPack.faktor} ★` : element != null ? `★ nur ${esc(ELEMENTE[el].name)} · Chancen ×${CONFIG.elementPack.faktor} ★` : `${esc(ELEMENTE[el].name)}-Edition`}</div>
+  <div class="pack-unter">${erfolg ? `ERFOLGSPACK · ${CONFIG.erfolgsPack.karten} KARTEN` : gluecks ? `GLÜCKSPACK · ${CONFIG.gluecksPack.karten} KARTEN` : element != null ? `ELEMENTPACK · ${CONFIG.elementPack.karten} KARTEN` : `BOOSTER · ${CONFIG.packGroesse} KARTEN`}</div>
+  <div class="pack-el">${erfolg ? `🏆 Chancen ×${CONFIG.erfolgsPack.faktor} 🏆` : gluecks ? `★ alle Chancen ×${CONFIG.gluecksPack.faktor} ★` : element != null ? `★ nur ${esc(ELEMENTE[el].name)} · Chancen ×${CONFIG.elementPack.faktor} ★` : `${esc(ELEMENTE[el].name)}-Edition`}</div>
   <div class="pack-glanz"></div>
 </div>
 <div class="pack-oeffnung"></div>
@@ -55,10 +55,10 @@ export function packsScreen(root, nav) {
     btnOeffnen.disabled = S.d.packs <= 0;
     // Sonderpacks gruppiert: Glückspacks und Elementpacks je Element
     const gruppen = new Map();
-    S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'gluecks' ? 'g' : 'e' + sp.el; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
+    S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'gluecks' ? 'g' : sp.typ === 'erfolg' ? 'a' : 'e' + sp.el; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
     sonderBox.replaceChildren(...[...gruppen.values()].map(({ sp, idx }) => h('button', {
-      class: 'btn gluecks-btn' + (sp.typ === 'element' ? ' element-btn' : ''), style: sp.typ === 'element' ? `--el:${farbe(sp.el)}` : '',
-      html: sp.typ === 'gluecks' ? `★ Glückspack öffnen (${idx.length})` : `${esc(ELEMENTE[sp.el].name)}-Elementpack öffnen (${idx.length})`,
+      class: 'btn gluecks-btn' + (sp.typ === 'element' ? ' element-btn' : sp.typ === 'erfolg' ? ' erfolg-btn' : ''), style: sp.typ === 'element' ? `--el:${farbe(sp.el)}` : '',
+      html: sp.typ === 'gluecks' ? `★ Glückspack öffnen (${idx.length})` : sp.typ === 'erfolg' ? `🏆 Erfolgspack öffnen (${idx.length})` : `${esc(ELEMENTE[sp.el].name)}-Elementpack öffnen (${idx.length})`,
       onclick: () => sonderOeffnen(idx[0]),
     })));
     kauf1.disabled = S.d.muenzen < CONFIG.wirtschaft.packPreis;
@@ -85,7 +85,7 @@ export function packsScreen(root, nav) {
     aenderung('pack'); speichernBald(300);
     Sound.rascheln();
     const sp = pack.sonder;
-    await zeremonie(pack, { titel: sp.typ === 'gluecks' ? `Glückspack · alle Chancen ×${CONFIG.gluecksPack.faktor}` : `${ELEMENTE[sp.el].name}-Elementpack · Chancen ×${CONFIG.elementPack.faktor}` });
+    await zeremonie(pack, { titel: sp.typ === 'gluecks' ? `Glückspack · alle Chancen ×${CONFIG.gluecksPack.faktor}` : sp.typ === 'erfolg' ? `Erfolgspack · Chancen ×${CONFIG.erfolgsPack.faktor}` : `${ELEMENTE[sp.el].name}-Elementpack · Chancen ×${CONFIG.elementPack.faktor}` });
     schwebe.replaceChildren(packElement());
     aktualisiere();
   };
@@ -372,7 +372,7 @@ class Zeremonie {
   reissen() {
     this.phase = 'reissen';
     const platz = this.q('.oe-packplatz');
-    const pack = packElement(this.artId, { gluecks: !!this.pack.gluecks, element: this.pack.sonder?.typ === 'element' ? this.pack.sonder.el : null });
+    const pack = packElement(this.artId, { gluecks: !!this.pack.gluecks, erfolg: this.pack.sonder?.typ === 'erfolg', element: this.pack.sonder?.typ === 'element' ? this.pack.sonder.el : null });
     pack.classList.add('gross');
     platz.append(pack);
     anim(pack, [{ transform: 'translateY(60px) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,.9,.3,1.2)' });

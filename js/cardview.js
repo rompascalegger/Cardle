@@ -52,6 +52,7 @@ export function karteHTML(c, opts = {}) {
    <div class="k-monster"><img class="k-fg" src="${bild.fg}" alt="${esc(art.name)}" draggable="false">${lookKopien}</div>
   </div>
    <div class="k-holo"></div><div class="k-scan"></div>
+   ${lookMarken(c)}
    <div class="k-siegel" data-tip="${esc(ELEMENTE[el].name)}">${glyphSVG(el)}</div>
    <div class="k-stufe" data-tip="Kartenseltenheit: ${esc(stufenName(st))} (${einsVon(CHANCEN[st])} pro Karte)">${esc(stufenKurz(st))}</div>
   </div>
@@ -65,6 +66,16 @@ export function karteHTML(c, opts = {}) {
 </div>
 <div class="k-hinten">${rueck}</div>
 </div></div></div>`;
+}
+
+// Kleine Marken für Holo-Stufe und Zusatzlooks, damit man sieht, was auf der Karte passiert [Nutzer, 21.11.2026]
+const LOOK_SYMBOL = ['⇋', '⇅', '◐', '▚', '⧉'];
+const HOLO_SYMBOL = { reverse: 'RH', holo: 'H', secret: 'SH', ghost: 'GR' };
+function lookMarken(c) {
+  const m = [];
+  if (c.holo !== 'keins') m.push(`<span class="k-marke holo-${c.holo}" data-tip="${esc(HOLO_NAMEN[c.holo])}">${HOLO_SYMBOL[c.holo]}</span>`);
+  LOOKS.forEach((l, i) => { if (hatLook(c.looks, i)) m.push(`<span class="k-marke look" data-tip="${esc(l.name)}">${LOOK_SYMBOL[i]}</span>`); });
+  return m.length ? `<div class="k-marken">${m.join('')}</div>` : '';
 }
 
 // Rangabzeichen für Effektkarten: ein goldener Winkel je Effekt, links und rechts am Rahmen [Nutzer, 21.11.2026]

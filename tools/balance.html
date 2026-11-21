@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cardle Balance</title>
+  <style>
+    body { font: 14px/1.45 system-ui, sans-serif; background: #120c24; color: #eee; margin: 0; padding: 20px; }
+    h1 { margin: 0 0 6px; } h3 { margin: 22px 0 8px; }
+    button { font: 700 14px system-ui; padding: 8px 14px; border-radius: 10px; border: 1px solid #8a5cff; background: #2a1d55; color: #fff; cursor: pointer; margin-right: 8px; }
+    .bahn { height: 10px; border-radius: 6px; background: #2a2050; margin: 12px 0 4px; overflow: hidden; }
+    #balken { height: 100%; width: 0; background: linear-gradient(90deg, #8a5cff, #ffd447); }
+    #stand { color: #b9a6ff; font-size: 12px; }
+    #log { white-space: pre-wrap; background: #0b0718; border-radius: 10px; padding: 10px; max-height: 220px; overflow: auto; font: 12px/1.4 ui-monospace, monospace; margin-top: 12px; }
+    table { border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 3px 6px; border: 1px solid #2a2050; text-align: center; white-space: nowrap; }
+    th { background: #1d1540; position: sticky; top: 0; }
+    td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Cardle Balance-Simulation</h1>
+  <p>Echte Spiel-Engine, 48 Kampagnenpunkte (eine Dimension linear und alle Dimensionen in der Breite), 10 Team-Aufstellungen. Ziel: Die beste Aufstellung gewinnt etwa 75 %, die übrigen deutlich seltener.</p>
+  <button id="schnell">Schnelltest</button><button id="voll">Volle Simulation (~1 Mio. Spiele)</button>
+  <div class="bahn"><div id="balken"></div></div><div id="stand"></div>
+  <div id="log"></div>
+  <div id="ergebnis"></div>
+  <script type="module" src="balance.js"></script>
+</body>
+</html>

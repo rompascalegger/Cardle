@@ -121,8 +121,15 @@ const BOSS_STARK = ['zauberbann', 'gegenpolbann', 'erzfeindjaeger', 'spiegel', '
 const AUFERSTEHUNG = EFFEKTE.find((e) => e.key === 'auferstehung').id;
 
 // Gegnerteam mit Zielstärke, nach denselben Teamregeln wie beim Spieler (Grundplätze + Teamkapazität)
-export function gegnerTeam(k, fort = {}) {
-  const ziel = kampfWerte(k, fort).staerke;
+// Stärkekurve als Funktion (für die Balance-Simulation mit anderen Parametern)
+export function basisStaerke(k, P = K) {
+  const index = (k.welt - 1) * K.stufenProWelt + (k.stufe - 1);
+  const bossMal = k.weltBoss ? P.bossFaktor : k.zwischenboss ? P.zwischenbossFaktor : 1;
+  return P.staerkeBasis * P.wachstumProStufe ** index * bossMal;
+}
+
+export function gegnerTeam(k, fort = {}, zielVorgabe = null) {
+  const ziel = zielVorgabe ?? kampfWerte(k, fort).staerke;
   const rng = new Rng(`gegner-v4-${k.id}-${ziel}`);
   const karten = [];
   let rest = ziel;

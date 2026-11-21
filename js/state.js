@@ -3,7 +3,7 @@
 import { CONFIG, LOOKS } from './config.js';
 import { Rng, zufallsSeed } from './rng.js';
 import { ARTEN } from './species.js';
-import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert } from './rules.js';
+import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten } from './rules.js';
 import { oeffnePack } from './generator.js';
 
 const params = new URLSearchParams(globalThis.location ? location.search : '');
@@ -139,6 +139,7 @@ export async function laden() {
   S.d.wirtschaftV = CONFIG.wirtschaft.version;
   S.d.sonderPacks = S.d.sonderPacks || [];
   S.d.erfolge = S.d.erfolge || {};
+  S.d.erfolgeAbgeholt = S.d.erfolgeAbgeholt || {};
   while (S.d.gluecksPacks > 0) { S.d.sonderPacks.push({ typ: 'gluecks' }); S.d.gluecksPacks--; }
   // Kampagne v2: neue Kampfstruktur, alter Fortschritt passt nicht mehr
   if ((S.d.kampagne.v || 1) < CONFIG.kampagne.version) { S.d.kampagne.fortschritt = {}; S.d.kampagne.v = CONFIG.kampagne.version; }
@@ -206,8 +207,8 @@ export function packOeffnen({ quelle = 'vorrat', sonderIndex = null } = {}) {
     if (sonderIndex == null || !S.d.sonderPacks[sonderIndex]) return null;
     sonder = S.d.sonderPacks.splice(sonderIndex, 1)[0];
   }
-  const G = CONFIG.gluecksPack, E = CONFIG.elementPack;
-  const optionen = !sonder ? {} : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
+  const G = CONFIG.gluecksPack, E = CONFIG.elementPack, EP = CONFIG.erfolgsPack;
+  const optionen = !sonder ? {} : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : sonder.typ === 'erfolg' ? { mult: EP.faktor, groesse: EP.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
   const pack = oeffnePack(S.rng, S.d.pity, optionen);
   pack.sonder = sonder;
   pack.gluecks = sonder?.typ === 'gluecks';
@@ -348,19 +349,26 @@ export function teamSetzen(team) {
   aenderung('team');
   speichernBald();
 }
-// Greedy: stärkste Karten zuerst, solange Plätze reichen
+// Automatisch aufstellen: zuerst einige günstige Karten für die ersten Züge (10 Beschwörungspunkte je Zug),
+// dann die stärksten Karten, solange die Plätze reichen [Nutzer, 21.11.2026]
 export function teamAutomatisch() {
   const kand = [];
-  for (let i = 0; i < S.karten.length; i++) { const c = karte(i); kand.push({ i, c, w: staerke(c.a) + plaetzeBringt(c) * 3 }); }
-  kand.sort((a, b) => b.w - a.w);
+  for (let i = 0; i < S.karten.length; i++) { const c = karte(i); kand.push({ i, c, w: staerke(c.a) + plaetzeBringt(c) * 3, k: kosten(c) }); }
   const team = [];
+  const genommen = new Set();
   let belegt = 0, gesamt = CONFIG.kampf.teamGrundplaetze;
-  // erst Kapazitätsbringer, die sich lohnen
-  for (const k of kand) {
-    if (team.length >= 24) break;
-    const b = plaetzeBelegt(k.c), g = plaetzeBringt(k.c);
-    if (belegt + b <= gesamt + g) { team.push(k.i); belegt += b; gesamt += g; }
+  const nimm = (x) => {
+    const b = plaetzeBelegt(x.c), g = plaetzeBringt(x.c);
+    if (genommen.has(x.i) || belegt + b > gesamt + g) return false;
+    team.push(x.i); genommen.add(x.i); belegt += b; gesamt += g; return true;
+  };
+  // Kostenkurve: günstige Karten für die ersten Züge, mittlere für danach, dann die stärksten (Balance-Simulation)
+  kand.sort((a, b) => b.w - a.w);
+  for (const stufe of CONFIG.kampf.teamKurve) {
+    let n = 0;
+    for (const x of kand) { if (n >= stufe.anzahl) break; if (x.k <= stufe.bis && nimm(x)) n++; }
   }
+  for (const x of kand) { if (team.length >= 24) break; nimm(x); }
   teamSetzen(team);
 }
 

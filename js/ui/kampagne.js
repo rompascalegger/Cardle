@@ -193,23 +193,38 @@ export function dailyScreen(root, nav) {
 }
 
 // ---------- Erfolge ----------
-export function erfolgeScreen(root) {
+export function erfolgeScreen(root, nav) {
   const wrap = h('section', { class: 'screen erfolge' });
+  root.append(wrap);
+  const abholen = (ids) => {
+    for (const id of ids) { S.d.erfolgeAbgeholt[id] = true; sonderPacksGeben({}, 0); S.d.sonderPacks.push({ typ: 'erfolg' }); }
+    Sound.jackpot(4); konfetti(60);
+    toast(`${ids.length} Erfolgspack${ids.length > 1 ? 's' : ''} abgeholt. Öffnen unter „Packs“.`);
+    aenderung('packs'); speichernBald(200);
+    wrap.replaceChildren(); erfolgeInhalt();
+  };
+  const erfolgeInhalt = () => {
   const gruppen = [...new Set(ERFOLGE.map((e) => e.gruppe))];
   const geschafft = ERFOLGE.filter((e) => S.d.erfolge[e.id]).length;
-  wrap.append(h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Erfolge</h2><span><b>${geschafft}</b> / ${ERFOLGE.length} freigeschaltet</span></div>` }));
+  const offen = ERFOLGE.filter((e) => S.d.erfolge[e.id] && !S.d.erfolgeAbgeholt[e.id]).map((e) => e.id);
+  const kopf = h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Erfolge</h2><span><b>${geschafft}</b> / ${ERFOLGE.length} freigeschaltet</span><span>Jeder Erfolg gibt ein Erfolgspack (Chancen ×${CONFIG.erfolgsPack.faktor}).</span></div>` });
+  if (offen.length) kopf.append(h('div', { class: 'kp-knoepfe' }, h('button', { class: 'btn primaer', html: `🏆 Alle Erfolgspacks abholen (${offen.length})`, onclick: () => abholen(offen) }), h('button', { class: 'btn', text: 'Zu den Packs', onclick: () => nav && nav('packs') })));
+  wrap.append(kopf);
   for (const g of gruppen) {
     const box = h('div', { class: 'panel erfolg-gruppe' }, h('h3', { text: g }));
     const liste = h('div', { class: 'erfolg-liste' });
     for (const e of ERFOLGE.filter((x) => x.gruppe === g)) {
       const fertig = !!S.d.erfolge[e.id];
       const w = Math.min(e.ziel, e.wert());
-      liste.append(h('div', { class: 'erfolg' + (fertig ? ' fertig' : ''), html: `<span class="erfolg-orden">${fertig ? '★' : '☆'}</span><div><b>${esc(e.name)}</b><small>${esc(e.text)}</small><i class="erfolg-balken"><i style="width:${(w / e.ziel) * 100}%"></i></i></div><div class="erfolg-lohn"><small>${fertig ? 'erhalten' : `${fmt(w)}/${fmt(e.ziel)}`}</small><span>${esc(lohnText(e.lohn))}</span></div>` }));
+      const el = h('div', { class: 'erfolg' + (fertig ? ' fertig' : ''), html: `<span class="erfolg-orden">${fertig ? '★' : '☆'}</span><div><b>${esc(e.name)}</b><small>${esc(e.text)}</small><i class="erfolg-balken"><i style="width:${(w / e.ziel) * 100}%"></i></i></div><div class="erfolg-lohn"><small>${fertig ? 'erhalten' : `${fmt(w)}/${fmt(e.ziel)}`}</small><span>${esc(lohnText(e.lohn))} · 🏆 Erfolgspack</span></div>` });
+      if (fertig && !S.d.erfolgeAbgeholt[e.id]) el.append(h('button', { class: 'btn klein primaer erfolg-abholen', text: 'Abholen', onclick: () => abholen([e.id]) }));
+      liste.append(el);
     }
     box.append(liste);
     wrap.append(box);
   }
-  root.append(wrap);
+  };
+  erfolgeInhalt();
   return {};
 }
 

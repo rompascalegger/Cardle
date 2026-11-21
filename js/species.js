@@ -105,5 +105,23 @@ function erzeugeArten() {
   return arten;
 }
 
-export const ARTEN = erzeugeArten();
+// Silber-Monster: eigene Arten am Ende der Liste (IDs ab 640), nur Klasse Silber, seltener gezogen
+function erzeugeSilberArten(arten) {
+  const vergeben = new Set(arten.map((a) => a.name));
+  const n = CONFIG.monster.silberArtenProElement;
+  for (let el = 0; el < ELEMENTE.length; el++) {
+    const r = seeded('silber-' + el);
+    const nm = namen(el, n, r, vergeben);
+    for (let i = 0; i < n; i++) {
+      arten.push({ id: arten.length, el, nr: CONFIG.monster.artenProElement + i, name: nm[i], bauplan: r.pick(BAUPLAENE.filter((b) => b !== 'humanoid' || el === 9)), rolle: r.pick(ROLLEN), form: 2 + (i % 2), kunstSeed: `silber-${el}-${i}`, silber: true, nurKlasse: CONFIG.monster.silberKlasse, gewicht: CONFIG.monster.silberGewicht });
+    }
+  }
+  return arten;
+}
+
+export const ARTEN = erzeugeSilberArten(erzeugeArten());
+export const REGULAERE_ARTEN = ARTEN.filter((a) => !a.silber);
+// Kumulierte Ziehgewichte für die Artwahl beim Öffnen
+let summe = 0;
+export const ARTEN_GEWICHTE = ARTEN.map((a) => (summe += a.gewicht ?? 1));
 export const artenFuerElement = (el) => ARTEN.filter((a) => a.el === el);

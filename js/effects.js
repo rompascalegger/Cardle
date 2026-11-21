@@ -57,7 +57,10 @@ export const EFFEKTE = [
   E(51, 'herzstueck', 'Herzstück', 'Maximale Spielerleben +1, solange die Karte lebt.', 4.0),
   E(52, 'lebenslicht', 'Lebenslicht', 'Beim Tod der Karte +1 Spielerleben.', 3.0),
   E(53, 'rettungsanker', 'Rettungsanker', 'Einmal pro Kampf: Verlierst du ein Leben, bekommst du es zurück.', 3.5),
+  // [Nutzer, 21.11.2026] nur für Bosse: die stärkste Karte eines Weltenbosses kehrt einmal mit vollen Lebenspunkten zurück
+  E(54, 'auferstehung', 'Auferstehung', 'Stirbt diese Karte, kehrt sie einmal mit vollen Lebenspunkten zurück.', 3.0, { nurBoss: true }),
 ];
+export const PACK_EFFEKTE = EFFEKTE.filter((e) => !e.nurBoss);
 
 export const EFFEKT = Object.fromEntries(EFFEKTE.map((e) => [e.id, e]));
 export const EFFEKT_BY_KEY = Object.fromEntries(EFFEKTE.map((e) => [e.key, e]));

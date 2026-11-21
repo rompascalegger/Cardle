@@ -94,3 +94,17 @@ export function blitzLicht(farbe = '#fff', staerke = 0.7) {
   layer.append(f);
   anim(f, [{ opacity: staerke }, { opacity: 0 }], { duration: 700, easing: 'ease-out' }).then(() => f.remove());
 }
+
+// Konfetti-Regen über den ganzen Bildschirm
+export function konfetti(anzahl = 120, farben = ['#ffd447', '#ff5fd2', '#5ffff0', '#fff', '#8a5cff']) {
+  const layer = document.getElementById('fx-layer');
+  if (!layer || document.documentElement.classList.contains('wenig-bewegung')) return;
+  for (let i = 0; i < anzahl; i++) {
+    const k = h('i', { class: 'konfetti' });
+    const w = 6 + Math.random() * 6, hh = 10 + Math.random() * 8;
+    k.style.cssText = `left:${Math.random() * 100}vw;top:-20px;width:${w}px;height:${hh}px;background:${farben[i % farben.length]}`;
+    layer.append(k);
+    const dx = (Math.random() - 0.5) * 220, rot = (Math.random() - 0.5) * 1440;
+    anim(k, [{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 }, { transform: `translate(${dx * 0.5}px, 55vh) rotate(${rot / 2}deg)`, opacity: 1, offset: 0.5 }, { transform: `translate(${dx}px, 110vh) rotate(${rot}deg)`, opacity: 0.9 }], { duration: 1800 + Math.random() * 1600, delay: Math.random() * 500, easing: 'cubic-bezier(.25,.6,.6,1)' }).then(() => k.remove());
+  }
+}

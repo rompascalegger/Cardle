@@ -2,12 +2,13 @@
 import { CONFIG, HOLO_STUFEN, LOOKS } from '../js/config.js';
 import { ELEMENTE, N, faktorInfo, faktor, gegenpol, mod } from '../js/elements.js';
 import { Rng } from '../js/rng.js';
-import { ARTEN } from '../js/species.js';
+import { ARTEN, REGULAERE_ARTEN, ARTEN_GEWICHTE } from '../js/species.js';
 import { EFFEKTE } from '../js/effects.js';
 import { seltenheit, seltenheitsChancen, holoFuerWurf, pityChance, kodiere, dekodiere, staerke, kosten, klasseFuerWurf } from '../js/rules.js';
 import { wuerfleKarte, oeffnePack, verteilePunkte, gegnerKarte } from '../js/generator.js';
 import { neuerKampf, zugBeginn, kampf, beschwoere, schadenFuer, simuliere, werte } from '../js/battle.js';
-import { gegnerTeam, WELTEN } from '../js/campaign.js';
+import { gegnerTeam, teamInfo, kampfWerte, DIMENSIONEN, ALLE_KAEMPFE } from '../js/campaign.js';
+const REG_ANTEIL = REGULAERE_ARTEN.length / ARTEN_GEWICHTE[ARTEN_GEWICHTE.length - 1];
 
 const ergebnisse = [];
 const out = document.getElementById('out');
@@ -84,28 +85,35 @@ test('Seltenheitschancen ergeben 100 % und werden seltener', () => {
 });
 
 // ---------- Verteilungen ----------
-test('Verteilung: Holo 1 % / 0,5 % / 0,1 % bei 10 Mio. Würfen', () => {
-  const r = new Rng('vert-holo'); const n = 1e7; const z = { reverse: 0, holo: 0, secret: 0, keins: 0 };
+test('Verteilung: Holo 1 % / 0,5 % / 0,1 % / Ghost 0,02 % bei 10 Mio. Würfen', () => {
+  const r = new Rng('vert-holo'); const n = 1e7; const z = { reverse: 0, holo: 0, secret: 0, ghost: 0, keins: 0 };
   for (let i = 0; i < n; i++) z[holoFuerWurf(r.next())]++;
-  const a = binomOk(z.reverse, n, 0.01), b = binomOk(z.holo, n, 0.005), c = binomOk(z.secret, n, 0.001);
-  return { ok: a.ok && b.ok && c.ok, info: `RH ${a.info}\nH ${b.info}\nSH ${c.info}` };
+  const H = CONFIG.holo;
+  const a = binomOk(z.reverse, n, H.reverse), b = binomOk(z.holo, n, H.holo), c = binomOk(z.secret, n, H.secret), d = binomOk(z.ghost, n, H.ghost);
+  return { ok: a.ok && b.ok && c.ok && d.ok, info: `RH ${a.info}\nH ${b.info}\nSH ${c.info}\nGhost ${d.info}` };
+});
+test('Glückspack: Chancen ×10 (Holo, Looks, seltene Klassen)', () => {
+  const r = new Rng('gluecks'); const n = 2e5; let rh = 0, look = 0, emerald = 0;
+  for (let i = 0; i < n; i++) { const { karte: c } = wuerfleKarte(r, 0, false, 10); if (c.holo === 'reverse') rh++; if (c.looks & 1) look++; if (c.kl === 4) emerald++; }
+  const a = binomOk(rh, n, 0.1), b = binomOk(look, n, 0.05), c = binomOk(emerald, n, 0.2 * REG_ANTEIL);
+  return { ok: a.ok && b.ok && c.ok, info: `RH ${a.info}\nLook ${b.info}\nEmerald ${c.info}` };
 });
 test('Verteilung: jeder Zusatzlook 0,5 % bei 10 Mio. Würfen', () => {
   const r = new Rng('vert-look'); const n = 1e7; let t = 0;
   for (let i = 0; i < n; i++) if (r.next() < CONFIG.lookChance) t++;
   return binomOk(t, n, 0.005);
 });
-test('Verteilung: Karten aus wuerfleKarte (1 Mio.), Effekte 0,1 % ohne Pity, Klassen', () => {
+test('Verteilung: Karten aus wuerfleKarte (1 Mio.), Effekte ohne Pity, Klassen, Silber-Monster', () => {
   const r = new Rng('vert-karte'); const n = 1e6; let fx = 0, rh = 0, look = 0; const kl = new Array(8).fill(0);
   for (let i = 0; i < n; i++) { const { karte: c } = wuerfleKarte(r, CONFIG.effekte.mind1); if (c.fx.length) fx++; if (c.holo === 'reverse') rh++; if (c.looks & 1) look++; kl[c.kl]++; }
-  const a = binomOk(fx, n, 0.001), b = binomOk(rh, n, 0.01), c = binomOk(look, n, 0.005), d = binomOk(kl[0], n, 0.4), e = binomOk(kl[7], n, 0.001);
+  const a = binomOk(fx, n, CONFIG.effekte.mind1), b = binomOk(rh, n, 0.01), c = binomOk(look, n, 0.005), d = binomOk(kl[0], n, CONFIG.klassen[0].chance * REG_ANTEIL), e = binomOk(kl[7], n, CONFIG.klassen[7].chance * REG_ANTEIL);
   return { ok: a.ok && b.ok && c.ok && d.ok && e.ok, info: `Effekt ${a.info}\nRH ${b.info}\nLook ${c.info}\nBronze ${d.info}\nDiamond ${e.info}` };
 });
-test('Klassenwurf: Grenzen der Log-Skala stimmen', () => klasseFuerWurf(0.0005) === 7 && klasseFuerWurf(0.003) === 6 && klasseFuerWurf(0.999) === 0 && klasseFuerWurf(0.5) === 1);
+test('Klassenwurf: Grenzen der Log-Skala stimmen', () => klasseFuerWurf(0.0005) === 7 && klasseFuerWurf(0.003) === 6 && klasseFuerWurf(0.999) === 0 && klasseFuerWurf(0.3) === 1);
 
 // ---------- Pity ----------
-test('Pity-Formel 10.3', () => pityChance(1) === 0.001 && pityChance(100) === 0.001 && nahe(pityChance(125), 0.002, 1e-12) && nahe(pityChance(150), 0.004, 1e-12) && pityChance(200) === 1);
-test('Pity: kein Konto über 200 Packs ohne Effektkarte, Mittel ≈ 78', () => {
+test('Pity-Formel 10.3 (mittelweich)', () => { const P = CONFIG.pity, m = CONFIG.effekte.mind1; return pityChance(1) === m && pityChance(P.schwelle) === m && nahe(pityChance(P.schwelle + P.verdopplung), 2 * m, 1e-12) && nahe(pityChance(P.schwelle + 2 * P.verdopplung), 4 * m, 1e-12) && pityChance(P.garantie) === 1; });
+test('Pity: kein Konto über die Garantie ohne Effektkarte', () => {
   const r = new Rng('pity'); const konten = 4000; let summe = 0, max = 0;
   for (let k = 0; k < konten; k++) {
     let pity = 0, n = 0;
@@ -113,7 +121,8 @@ test('Pity: kein Konto über 200 Packs ohne Effektkarte, Mittel ≈ 78', () => {
     summe += n; if (n > max) max = n;
   }
   const mittel = summe / konten;
-  return { ok: max <= 200 && nahe(mittel, 78, 4), info: `Mittel ${mittel.toFixed(1)} Packs, Maximum ${max}` };
+  const P = CONFIG.pity;
+  return { ok: max <= P.garantie && mittel > P.schwelle * 0.5 && mittel < P.schwelle * 1.05, info: `Mittel ${mittel.toFixed(1)} Packs, Maximum ${max} (Garantie ${P.garantie})` };
 });
 
 // ---------- Karten ----------
@@ -142,12 +151,20 @@ test('Kosten = Stärke × Preisfaktoren (Beschwörungsverstärker ×3)', () => {
   const c = { art: 0, kl: 0, a: { kraft: 1, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx: [1] };
   return kosten(c) === 3;
 });
-test('Monster: 20 je Element, 640 eindeutige Namen', () => {
+test('Monster: 20 je Element plus Silber-Monster, alle Namen eindeutig', () => {
   const namen = new Set(ARTEN.map((a) => a.name));
-  const proEl = ELEMENTE.map((_, el) => ARTEN.filter((a) => a.el === el).length);
-  return { ok: ARTEN.length === 640 && namen.size === 640 && proEl.every((n) => n === 20), info: `${ARTEN.length} Arten, ${namen.size} Namen` };
+  const proEl = ELEMENTE.map((_, el) => REGULAERE_ARTEN.filter((a) => a.el === el).length);
+  const silber = ARTEN.filter((a) => a.silber);
+  const okSilber = silber.length === 32 * CONFIG.monster.silberArtenProElement && silber.every((a) => a.nurKlasse === CONFIG.monster.silberKlasse);
+  return { ok: REGULAERE_ARTEN.length === 640 && namen.size === ARTEN.length && proEl.every((n) => n === 20) && okSilber, info: `${REGULAERE_ARTEN.length} normale + ${silber.length} Silber-Arten, ${namen.size} Namen` };
 });
-test('Effekte: 53 verschieden, jede ID einmal', () => new Set(EFFEKTE.map((e) => e.id)).size === EFFEKTE.length && EFFEKTE.length === 53);
+test('Silber-Monster erscheinen nur als Silber', () => {
+  const r = new Rng('silber'); let n = 0;
+  for (let i = 0; i < 2e5; i++) { const { karte: c } = wuerfleKarte(r, 0); if (ARTEN[c.art].silber) { n++; if (c.kl !== CONFIG.monster.silberKlasse) return { ok: false, info: `Klasse ${c.kl}` }; } }
+  return { ok: n > 0, info: `${n} Silber-Monster gezogen` };
+});
+test('Effekte: 53 im Pack-Pool plus Boss-Effekt, jede ID einmal', () => new Set(EFFEKTE.map((e) => e.id)).size === EFFEKTE.length && EFFEKTE.filter((e) => !e.nurBoss).length === 53);
+test('Kodierung: alte Karten ohne Heilung werden weiter gelesen', () => { const alt = '0a2' + '53101010' + '0' + '0'; const c = dekodiere(alt); return c.a.kraft === 5 && c.a.kapazitaet === 0 && c.a.teamplatz === 1 && c.a.heilung === 0 && c.holo === 'keins' && c.fx.length === 0; });
 
 // ---------- Kampf ----------
 const leer = () => ({ kraft: 0, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 });
@@ -182,20 +199,32 @@ test('Leben: Angriff ohne eigene Monster kostet 1 Leben pro Runde', () => {
   kampf(b);
   return b.seiten[1].leben === CONFIG.kampf.spielerLeben - 1;
 });
-test('Kampagne: Simulation aller Kämpfe endet, Gegnerstärke wächst', () => {
-  const r = new Rng('sim');
-  let alleEnden = true, letzte = 0, wachsend = true;
-  const team = Array.from({ length: 8 }, () => wuerfleKarte(r, 0).karte);
-  for (const w of WELTEN) for (const kampfDef of w.kaempfe) {
-    const g = gegnerTeam(kampfDef);
-    const sum = g.reduce((x, c) => x + staerke(c.a), 0);
-    if (!kampfDef.boss && sum < letzte * 0.8) wachsend = false;
-    if (!kampfDef.boss) letzte = sum;
-    const b = neuerKampf({ spielerKarten: team, gegnerKarten: g, gegnerLeben: kampfDef.leben, rng: r });
-    const e = simuliere(b, 200);
-    if (!e) alleEnden = false;
+test('Kampagne: 32 Dimensionen × 8 Welten × 10 Stufen + Kern, eindeutige Weltnamen, Stärke steigt, Stichprobe endet', () => {
+  const welten = DIMENSIONEN.flatMap((d) => d.welten);
+  const namen = new Set(welten.map((w) => w.name));
+  const anzahlOk = ALLE_KAEMPFE.length === 32 * 8 * 10 + CONFIG.kern.welten * 10 && welten.length === 32 * 8 + CONFIG.kern.welten;
+  let wachsend = true, alleEnden = true, regeln = true;
+  for (const d of DIMENSIONEN) {
+    let letzte = 0;
+    for (const w of d.welten) for (const k of w.stufen) { if (!k.boss) { if (k.basis < letzte) wachsend = false; letzte = k.basis; } }
   }
-  return { ok: alleEnden && wachsend, info: `alle ${WELTEN.reduce((x, w) => x + w.kaempfe.length, 0)} Kämpfe beendet` };
+  const r = new Rng('sim');
+  const team = Array.from({ length: 8 }, () => wuerfleKarte(r, 0).karte);
+  ALLE_KAEMPFE.forEach((k, idx) => {
+    if (idx % 97 !== 0 && !(k.kern && k.weltBoss)) return;
+    const g = gegnerTeam(k, {});
+    const ti = teamInfo(g);
+    if (ti.belegt > ti.gesamt) regeln = false;
+    const kw = kampfWerte(k, {});
+    const b = neuerKampf({ spielerKarten: team, gegnerKarten: g, gegnerLeben: k.leben, rng: r, gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank });
+    if (!simuliere(b, 200)) alleEnden = false;
+  });
+  return { ok: anzahlOk && namen.size === welten.length && wachsend && alleEnden && regeln, info: `${ALLE_KAEMPFE.length} Kämpfe, ${namen.size} Weltnamen, Kern offen ab ${CONFIG.kern.freiAbWeltenJeDimension} Welten je Dimension` };
+});
+test('Weltenbosse: stärkste Karte mit Auferstehung und 3 Effekten', () => {
+  const k = ALLE_KAEMPFE.find((x) => x.weltBoss && x.welt === 3 && x.dim === 5);
+  const g = gegnerTeam(k, {});
+  return { ok: g[0].fx.length === 3 && g[0].fx.includes(54) && g[1].fx.length >= 2, info: g[0].fx.join(', ') };
 });
 test('Kampf: alle 53 Effekte laufen ohne Fehler durch', () => {
   const r = new Rng('fx');

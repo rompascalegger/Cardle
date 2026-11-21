@@ -95,7 +95,9 @@ export function palette(el) {
 // ---------- Formen ----------
 function flamme(x, y, s, c1, c2, cls = 'flk') {
   const d = 'M0,0 C-12,0 -16,-12 -10,-22 C-8,-16 -4,-14 -3,-18 C-5,-28 2,-34 0,-42 C10,-34 14,-24 10,-14 C13,-16 15,-20 14,-24 C20,-14 16,0 0,0Z';
-  return `<g class="${cls}" transform="translate(${f1(x)} ${f1(y)}) scale(${s})"><path d="${d}" fill="${c1}"/><path d="${d}" transform="translate(0 -2) scale(.58)" fill="${c2}"/></g>`;
+  // Die Animation sitzt auf einer Hülle: Eine CSS-Transformation würde sonst Position und Größe (transform-Attribut) überschreiben.
+  const verz = ((Math.abs(x * 7.3 + y * 3.1) % 12) / 10).toFixed(2);
+  return `<g class="${cls}" style="animation-delay:-${verz}s"><g transform="translate(${f1(x)} ${f1(y)}) scale(${s})"><path d="${d}" fill="${c1}"/><path d="${d}" transform="translate(0 -2) scale(.58)" fill="${c2}"/></g></g>`;
 }
 function kristall(x, y, h, w, rot, c, O) {
   const d = `M0,0 L${-w},${-h * 0.22} L${-w},${-h * 0.78} L0,${-h} L${w},${-h * 0.78} L${w},${-h * 0.22}Z`;
@@ -334,7 +336,7 @@ function schmuck(el, A, P, r, bp) {
     case 11: // Philosophie
       top.push(`<ellipse cx="${k.x}" cy="${k.y - 10}" rx="20" ry="5.5" fill="none" stroke="${P.acc}" stroke-width="3.2" filter="url(#gl)" class="schwebe"/>`);
       front.push(`<g transform="translate(${f1(A.eyeX)} ${f1(A.eyeY - A.eyeR * 2.1)})">${ell(0, 0, A.eyeR * 0.7, A.eyeR * 0.45, '#fff', `stroke="${O}" stroke-width="1.6"`)}${kreis(0, 0, A.eyeR * 0.3, P.acc)}</g>`);
-      back.push(`<g transform="translate(${f1(rk.x + 18)} ${f1(rk.y - 6)}) rotate(-12)" class="schwebe"><path d="M-12,-8 L0,-5 L12,-8 L12,8 L0,11 L-12,8Z" fill="#f6f0dc" ${S}/><path d="M0,-5 L0,11" stroke="${O}" stroke-width="1.4"/></g>`);
+      back.push(`<g class="schwebe"><g transform="translate(${f1(rk.x + 18)} ${f1(rk.y - 6)}) rotate(-12)"><path d="M-12,-8 L0,-5 L12,-8 L12,8 L0,11 L-12,8Z" fill="#f6f0dc" ${S}/><path d="M0,-5 L0,11" stroke="${O}" stroke-width="1.4"/></g></g>`);
       krone = true; break;
     case 12: // Mathematik
       front.push(`<path d="M${br.x - 12},${br.y + 6} L${br.x},${br.y - 12} L${br.x + 12},${br.y + 6}Z" fill="none" stroke="#fff" stroke-width="2" opacity=".75"/>`);
@@ -344,7 +346,7 @@ function schmuck(el, A, P, r, bp) {
     case 13: // Gravitation
       back.push(`<ellipse cx="110" cy="${A.cy}" rx="${A.rx + 26}" ry="12" fill="none" stroke="${P.acc}" stroke-width="2" opacity=".7" transform="rotate(-12 110 ${A.cy})"/>`);
       front.push(`<g>${spin(110, A.cy, 14)}${kreis(110 + A.rx + 20, A.cy - 8, 6, '#7a6f66', S)}${kreis(110 - A.rx - 18, A.cy + 10, 4.5, '#8a7f76', S)}</g>`);
-      top.push(`<path class="schwebe" transform="translate(${k.x} ${k.y - 12})" d="M-8,4 L-5,-6 L5,-8 L9,2 L2,8Z" fill="#8a7f76" ${S}/>`);
+      top.push(`<g class="schwebe"><path transform="translate(${k.x} ${k.y - 12})" d="M-8,4 L-5,-6 L5,-8 L9,2 L2,8Z" fill="#8a7f76" ${S}/></g>`);
       krone = true; break;
     case 14: // Elektrizität
       for (const p of A.ohren) back.push(blitzForm(p.x, p.y - 8, 0.95, P.body, O, p.x < A.eyeX ? -25 : 25));
@@ -417,7 +419,7 @@ function schmuck(el, A, P, r, bp) {
       krone = true; break;
     case 26: { // Säure
       const by = A.boden - 8;
-      for (let i = 0; i < 4; i++) front.push(tropfen(A.cx - 30 + i * 20 + r.int(-4, 4), by + r.int(0, 6), 0.7, P.acc, O).replace('<path', '<path class="tropf"'));
+      for (let i = 0; i < 4; i++) front.push(`<g class="tropf" style="animation-delay:-${(i * 0.6).toFixed(1)}s">${tropfen(A.cx - 30 + i * 20 + r.int(-4, 4), by + r.int(0, 6), 0.7, P.acc, O)}</g>`);
       for (let i = 0; i < 3; i++) top.push(kreis(k.x - 10 + i * 10, k.y - 4 - i * 4, 3 + i, 'none', `stroke="${P.acc}" stroke-width="1.8" class="blase"`));
       front.push(kreis(br.x - 14, br.y - 6, 4, dunkel(P.body, 0.35)), kreis(br.x + 12, br.y + 2, 3, dunkel(P.body, 0.35)));
       krone = true; break;
@@ -479,7 +481,7 @@ function hintergrund(el, r, P) {
     case 10: { const c = ['#ffd23f', '#3fa7ff', '#62e36a', '#ff7b3d', '#ff5fa2']; for (let i = 0; i < 9; i++) out.push(`<path d="M${rand(-20, W)},${rand(0, H)} q${rand(20, 60)},${rand(-30, 30)} ${rand(40, 90)},${rand(-10, 10)}" stroke="${c[i % 5]}" stroke-width="${rand(6, 14)}" stroke-linecap="round" fill="none" opacity=".35"/>`); break; }
     case 11: for (const x of [20, 56, 164, 200]) out.push(`<rect x="${x - 7}" y="40" width="14" height="96" fill="#2c2550" opacity=".85"/><rect x="${x - 10}" y="34" width="20" height="7" fill="#3a3166"/>`); out.push(`<path d="M0,34 L110,8 L220,34Z" fill="#3a3166" opacity=".9"/>`); for (let i = 0; i < 8; i++) out.push(stern(rand(70, 150), rand(30, 100), 1.6, '#ffd86b', 'tw')); break;
     case 12: { let g = ''; for (let x = 0; x <= W; x += 20) g += `<path d="M${x},0 V160" stroke="#43c6b5" stroke-width=".7" opacity=".35"/>`; for (let y = 0; y <= H; y += 20) g += `<path d="M0,${y} H220" stroke="#43c6b5" stroke-width=".7" opacity=".35"/>`; out.push(g, `<circle cx="40" cy="40" r="18" fill="none" stroke="#fff" opacity=".18"/><path d="M160,130 l20,-34 20,34z" fill="none" stroke="#fff" opacity=".18"/>`); break; }
-    case 13: for (let i = 1; i < 6; i++) out.push(`<ellipse cx="110" cy="96" rx="${i * 26}" ry="${i * 9}" fill="none" stroke="#6b5bd6" opacity="${0.5 - i * 0.07}"/>`); for (let i = 0; i < 6; i++) out.push(`<path class="schwebe" transform="translate(${rand(0, W)} ${rand(10, 150)}) rotate(${rand(0, 90)}) scale(${rand(0.5, 1.2)})" d="M-8,4 L-5,-6 L5,-8 L9,2 L2,8Z" fill="#3c3470"/>`); break;
+    case 13: for (let i = 1; i < 6; i++) out.push(`<ellipse cx="110" cy="96" rx="${i * 26}" ry="${i * 9}" fill="none" stroke="#6b5bd6" opacity="${0.5 - i * 0.07}"/>`); for (let i = 0; i < 6; i++) out.push(`<g class="schwebe"><path transform="translate(${rand(0, W)} ${rand(10, 150)}) rotate(${rand(0, 90)}) scale(${rand(0.5, 1.2)})" d="M-8,4 L-5,-6 L5,-8 L9,2 L2,8Z" fill="#3c3470"/></g>`); break;
     case 14: out.push(`<path d="M0,0 H220 V36 Q190,50 160,38 Q130,52 100,40 Q70,54 40,40 Q20,48 0,40Z" fill="#23234f"/>`); for (let i = 0; i < 2; i++) out.push(`<path class="blitzbg" d="M${rand(20, 200)},30 l-10,34 10,0 -14,40" stroke="#bfeaff" stroke-width="2.4" fill="none" filter="url(#gl)"/>`); break;
     case 15: { let rays = ''; for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; rays += `<path d="M110,96 L${f1(110 + Math.cos(a) * 200)},${f1(96 + Math.sin(a) * 200)} L${f1(110 + Math.cos(a + 0.1) * 200)},${f1(96 + Math.sin(a + 0.1) * 200)}Z" fill="#fff"/>`; } out.push(`<g opacity=".35">${spin(110, 96, 40)}${rays}</g>`); break; }
     case 16: out.push(`<path d="M0,110 L30,60 50,90 80,40 110,96 140,52 170,92 200,48 220,80 V160 H0Z" fill="#9fd0f0" opacity=".45"/><path d="M80,40 L88,56 72,56Z M140,52 L148,66 132,66Z" fill="#fff" opacity=".8"/>`); for (let i = 0; i < 14; i++) out.push(kreis(rand(0, W), rand(0, H), rand(0.8, 2), '#fff', 'class="schnee" opacity=".8"')); break;
@@ -497,7 +499,7 @@ function hintergrund(el, r, P) {
     case 28: for (let i = 0; i < 4; i++) out.push(`<path d="M0,${40 + i * 30} Q27,${20 + i * 30} 55,${40 + i * 30} T110,${40 + i * 30} T165,${40 + i * 30} T220,${40 + i * 30}" fill="none" stroke="#5ffff0" stroke-width="1.2" opacity="${0.15 + i * 0.06}"/>`); for (let i = 0; i < 20; i++) out.push(kreis(rand(0, W), rand(0, H), rand(0.5, 1.5), '#ff7af6', 'opacity=".55" class="tw"')); break;
     case 29: for (let i = 1; i < 7; i++) out.push(`<ellipse cx="110" cy="92" rx="${i * 22}" ry="${i * 7}" fill="none" stroke="#ff8a2a" stroke-width="${2.4 - i * 0.3}" opacity="${0.55 - i * 0.07}" transform="rotate(-8 110 92)"/>`); for (let i = 0; i < 20; i++) out.push(kreis(rand(0, W), rand(0, H), rand(0.3, 1.1), '#fff', 'opacity=".6"')); break;
     case 30: { let t = ''; for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; t += `<path d="M${f1(110 + Math.cos(a) * 64)},${f1(80 + Math.sin(a) * 64)} L${f1(110 + Math.cos(a) * 74)},${f1(80 + Math.sin(a) * 74)}" stroke="#d9b26b" stroke-width="3"/>`; } out.push(`<g opacity=".35">${kreis(110, 80, 76, 'none', 'stroke="#d9b26b" stroke-width="2"')}${t}<path d="M110,80 L110,20" stroke="#d9b26b" stroke-width="3" >${spin(110, 80, 20)}</path></g>`); break; }
-    case 31: out.push(kreis(178, 32, 14, '#d8c8ff', 'opacity=".85"'), kreis(184, 28, 13, P.bg1)); for (let i = 0; i < 5; i++) out.push(ell(rand(0, W), rand(110, 160), rand(30, 60), rand(6, 12), '#2a1d3d', 'opacity=".6" class="wolke"')); for (let i = 0; i < 3; i++) out.push(`<path class="schwebe" transform="translate(${rand(20, 200)} ${rand(20, 70)}) scale(.8)" d="M0,0 q-6,-6 -12,0 q4,-2 6,2 q2,-4 6,-2 q2,-4 6,2 q2,-4 6,-2 q-6,-6 -12,0z" fill="#0a0612"/>`); break;
+    case 31: out.push(kreis(178, 32, 14, '#d8c8ff', 'opacity=".85"'), kreis(184, 28, 13, P.bg1)); for (let i = 0; i < 5; i++) out.push(ell(rand(0, W), rand(110, 160), rand(30, 60), rand(6, 12), '#2a1d3d', 'opacity=".6" class="wolke"')); for (let i = 0; i < 3; i++) out.push(`<g class="schwebe"><path transform="translate(${rand(20, 200)} ${rand(20, 70)}) scale(.8)" d="M0,0 q-6,-6 -12,0 q4,-2 6,2 q2,-4 6,-2 q2,-4 6,2 q2,-4 6,-2 q-6,-6 -12,0z" fill="#0a0612"/></g>`); break;
   }
   return out.join('');
 }
@@ -509,8 +511,8 @@ const STIL_ANIM = `<style>
 @keyframes schweben{50%{transform:translateY(-5px)}}
 .lid{transform-box:fill-box;transform-origin:50% 0;animation:blinz 5.2s infinite;transform:scaleY(0)}
 @keyframes blinz{0%,93%,100%{transform:scaleY(0)}96%{transform:scaleY(1)}}
-.flk{animation:flk 1.1s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
-@keyframes flk{to{transform:scale(1.06,1.12) skewX(3deg)}}
+.flk{animation:flk 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+@keyframes flk{0%,100%{transform:scale(1,1) skewX(0deg)}25%{transform:scale(1.04,1.09) skewX(2.5deg)}50%{transform:scale(.97,1.02) skewX(-2deg)}75%{transform:scale(1.03,.96) skewX(1.2deg)}}
 .tw{animation:tw 2.4s ease-in-out infinite alternate}
 @keyframes tw{to{opacity:.15}}
 .schwebe{animation:schweben 3.6s ease-in-out infinite}
@@ -638,6 +640,11 @@ export function monsterBild(artId, animiert = true) {
   const form = art.form ?? 2;
   const r = seeded(art.kunstSeed);
   const P = variiere(palette(el), r, form);
+  // Silber-Monster: metallisch-silberner Körper, Element-Akzent bleibt
+  if (art.silber) {
+    P.body = mix(P.body, '#d4dde6', 0.62); P.dark = mix(P.dark, '#5d6874', 0.6); P.belly = '#f4f7fa';
+    P.O = dunkel(P.dark, 0.55); P.hi = hell(P.body, 0.45);
+  }
   const bp = art.bauplan;
   const { back, body, A } = koerper(bp, r, P);
   const deko = schmuck(el, A, P, r, bp);
@@ -674,6 +681,7 @@ ${form === 3 ? `<g>${aura(A, P, r)}</g>` : ''}
 <g>${kopfschmuck(A, kopf, P)}${deko.top.join('')}</g>
 <g>${backen}${augen(A, augenStil, P)}${mund(A, mundStil, P)}</g>
 <g>${deko.front.join('')}</g>
+${art.silber ? `<g>${[[44, 36, 5], [176, 44, 4], [58, 118, 3.5], [168, 112, 4.5]].map(([x, y, rr]) => stern(x, y, rr, '#ffffff', 'tw')).join('')}</g>` : ''}
 </g></g></svg>`;
   const rb = seeded(art.kunstSeed + '-bg');
   const bg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160" preserveAspectRatio="xMidYMid slice">${defs(P)}${animiert ? STIL_ANIM : STIL_STATISCH}

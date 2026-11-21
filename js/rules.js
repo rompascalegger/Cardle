@@ -7,32 +7,47 @@ export const SELTENHEIT_NAMEN = CONFIG.seltenheit.namen;
 
 // ---------- Klassen ----------
 // Wurf u in [0,1) → Klassenindex. Seltenste Klasse liegt bei kleinen u (für die Log-Skala der Anzeige).
-export function klassenGrenzen() {
+// Klassenchancen, optional mit Glücksfaktor: seltene Klassen ×mult, die häufigen anteilig seltener
+export function klassenChancen(mult = 1) {
+  const ch = KLASSEN.map((k) => k.chance);
+  if (mult === 1) return ch;
+  const ab = CONFIG.gluecksPack.klasseAb;
+  const selten = Math.min(0.95, ch.reduce((s, c, i) => s + (i >= ab ? c * mult : 0), 0));
+  const haeufig = ch.reduce((s, c, i) => s + (i < ab ? c : 0), 0);
+  return ch.map((c, i) => (i >= ab ? c * mult : (c * (1 - selten)) / haeufig));
+}
+export function klassenGrenzen(mult = 1) {
+  const ch = klassenChancen(mult);
   const g = []; // [{i, von, bis}] von selten nach häufig
   let acc = 0;
   for (let i = KLASSEN.length - 1; i >= 0; i--) {
-    const von = acc; acc += KLASSEN[i].chance;
+    const von = acc; acc += ch[i];
     g.push({ i, von, bis: i === 0 ? 1 : acc });
   }
   return g;
 }
-const GRENZEN = klassenGrenzen();
-export function klasseFuerWurf(u) {
-  for (const z of GRENZEN) if (u < z.bis) return z.i;
+const GRENZEN = new Map();
+export function klasseFuerWurf(u, mult = 1) {
+  if (!GRENZEN.has(mult)) GRENZEN.set(mult, klassenGrenzen(mult));
+  for (const z of GRENZEN.get(mult)) if (u < z.bis) return z.i;
   return 0;
 }
 
 // ---------- Holo ----------
-export function holoGrenzen() {
+export function holoGrenzen(mult = 1) {
   const h = CONFIG.holo;
+  const g = (h.ghost || 0) * mult;
   return [
-    { holo: 'secret', bis: h.secret },
-    { holo: 'holo', bis: h.secret + h.holo },
-    { holo: 'reverse', bis: h.secret + h.holo + h.reverse },
-  ];
+    { holo: 'ghost', bis: g },
+    { holo: 'secret', bis: g + h.secret * mult },
+    { holo: 'holo', bis: g + (h.secret + h.holo) * mult },
+    { holo: 'reverse', bis: g + (h.secret + h.holo + h.reverse) * mult },
+  ].filter((z) => z.bis > 0);
 }
-export function holoFuerWurf(u) {
-  for (const z of holoGrenzen()) if (u < z.bis) return z.holo;
+const HOLO_G = new Map();
+export function holoFuerWurf(u, mult = 1) {
+  if (!HOLO_G.has(mult)) HOLO_G.set(mult, holoGrenzen(mult));
+  for (const z of HOLO_G.get(mult)) if (u < z.bis) return z.holo;
   return 'keins';
 }
 
@@ -44,14 +59,14 @@ export const hatLook = (mask, i) => !!(mask & (1 << i));
 export function seltenheit(holo, k, e) {
   const S = CONFIG.seltenheit;
   const looks = e === 0 ? k : (k === 0 ? 0 : (k <= 4 ? S.looksMitEffekt1bis4 : S.looksMitEffekt5));
-  return S.basis[holo] + looks + S.effekt[e];
+  return Math.min(S.namen.length, S.basis[holo] + looks + S.effekt[e]);
 }
 export const kartenSeltenheit = (c) => seltenheit(c.holo, lookAnzahl(c.looks), c.fx.length);
 
 function binom(n, k) { let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - i + 1)) / i; return r; }
 export function pHolo(h) {
   const H = CONFIG.holo;
-  return h === 'keins' ? 1 - H.reverse - H.holo - H.secret : H[h];
+  return h === 'keins' ? 1 - H.reverse - H.holo - H.secret - (H.ghost || 0) : H[h];
 }
 export function pLooks(k) { const p = CONFIG.lookChance; return binom(LOOKS.length, k) * p ** k * (1 - p) ** (LOOKS.length - k); }
 export function pEffekte(e) {
@@ -98,11 +113,18 @@ export function pityChance(n) {
   return Math.min(1, base * 2 ** ((n - P.schwelle) / P.verdopplung));
 }
 
+// ---------- Verkauf [OFFEN, Platzhalter] ----------
+export function verkaufswert(c) {
+  const W = CONFIG.wirtschaft;
+  return W.verkaufKlasse[c.kl] * W.verkaufStufe[kartenSeltenheit(c)] * (c.fx.length ? 5 : 1);
+}
+
 // ---------- Staub ----------
 export const staubBeimAbtragen = (c) => c.kl + 1; // [ANNAHME] Klassennummer 1..8
 
 // ---------- Kodierung (kompakt für große Sammlungen) ----------
-// Format: art(2) kl(1) 8×attr(1) holo(1) looks(1) [fx(2)]*
+// Format: art(2) kl(1) 9×attr(1) holo(1) looks(1) [fx(2)]*  (gerade Länge)
+// Altes Format mit 8 Attributen (ohne Heilung) hat ungerade Länge und wird weiter gelesen.
 const b36 = (n, len) => n.toString(36).padStart(len, '0');
 export function kodiere(c) {
   let s = b36(c.art, 2) + c.kl.toString(36);
@@ -111,17 +133,22 @@ export function kodiere(c) {
   for (const id of c.fx) s += b36(id, 2);
   return s;
 }
+const ALTE_KEYS = ATTR_KEYS.filter((k) => k !== 'heilung');
 export function dekodiere(s) {
+  const alt = s.length % 2 === 1;
+  const keys = alt ? ALTE_KEYS : ATTR_KEYS;
   const a = {};
-  ATTR_KEYS.forEach((k, i) => { a[k] = parseInt(s[3 + i], 36); });
+  keys.forEach((k, i) => { a[k] = parseInt(s[3 + i], 36); });
+  if (alt) a.heilung = 0;
+  const h = 3 + keys.length;
   const fx = [];
-  for (let i = 13; i + 1 < s.length; i += 2) fx.push(parseInt(s.slice(i, i + 2), 36));
+  for (let i = h + 2; i + 1 < s.length; i += 2) fx.push(parseInt(s.slice(i, i + 2), 36));
   return {
     art: parseInt(s.slice(0, 2), 36),
     kl: parseInt(s[2], 36),
     a,
-    holo: HOLO_STUFEN[parseInt(s[11], 36)],
-    looks: parseInt(s[12], 36),
+    holo: HOLO_STUFEN[parseInt(s[h], 36)],
+    looks: parseInt(s[h + 1], 36),
     fx,
   };
 }

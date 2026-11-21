@@ -3,7 +3,7 @@
 import { CONFIG, LOOKS } from './config.js';
 import { Rng, zufallsSeed } from './rng.js';
 import { ARTEN } from './species.js';
-import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke } from './rules.js';
+import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert } from './rules.js';
 import { oeffnePack } from './generator.js';
 
 const params = new URLSearchParams(globalThis.location ? location.search : '');
@@ -58,15 +58,19 @@ function neuerStand() {
     rng: null,
     muenzen: CONFIG.wirtschaft.startMuenzen,
     packs: CONFIG.wirtschaft.startPacks,
+    gluecksPacks: 0, // alt, wird in sonderPacks übernommen
+    sonderPacks: [], // [{ typ: 'gluecks' } | { typ: 'element', el }]
+    erfolge: {},
     staub: Object.fromEntries(LOOKS.map((l) => [l.key, 0])),
     pity: 0,
     karten: '', // kodierte Karten, ';'-getrennt
     team: [],
-    kampagne: { fortschritt: {}, siege: 0, niederlagen: 0 },
+    kampagne: { v: CONFIG.kampagne.version, fortschritt: {}, siege: 0, niederlagen: 0 },
     stat: { packs: 0, karten: 0, besteStufe: 1, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), autoPacks: 0, muenzenAusgegeben: 0 },
     einst: { lautstaerke: 0.45, stumm: false, bewegung: 'auto', aufdecken: 'normal' },
     gesehen: [], // Indizes neuer Karten seit dem letzten Besuch der Sammlung
     arten: CONFIG.monster.artenProElement, // Arten je Element, mit denen die Karten gespeichert sind
+    wirtschaftV: CONFIG.wirtschaft.version,
   };
 }
 
@@ -114,12 +118,14 @@ export const anzahlKarten = () => S.karten.length;
 // ---------- Laden/Speichern ----------
 export async function laden() {
   let gespeicherteArten = CONFIG.monster.artenProElement;
+  let gespeicherteWirtschaft = CONFIG.wirtschaft.version;
   let roh = await IDB.get(SLOT);
   if (!roh) { try { roh = localStorage.getItem(SLOT); } catch { /* ignore */ } }
   if (roh) {
     try {
       const d = JSON.parse(roh);
       gespeicherteArten = d.arten || 3;
+      gespeicherteWirtschaft = d.wirtschaftV || 1;
       S.d = Object.assign(neuerStand(), d);
       S.d.stat = Object.assign(neuerStand().stat, d.stat || {});
       S.d.einst = Object.assign(neuerStand().einst, d.einst || {});
@@ -128,9 +134,17 @@ export async function laden() {
   }
   S.karten = S.d.karten ? S.d.karten.split(';') : [];
   migriereArten(gespeicherteArten);
+  // Wirtschaft v2: Münzwerte ×10
+  if (gespeicherteWirtschaft < 2) { S.d.muenzen = Math.round(S.d.muenzen * 10); S.d.stat.muenzenAusgegeben = Math.round((S.d.stat.muenzenAusgegeben || 0) * 10); }
+  S.d.wirtschaftV = CONFIG.wirtschaft.version;
+  S.d.sonderPacks = S.d.sonderPacks || [];
+  S.d.erfolge = S.d.erfolge || {};
+  while (S.d.gluecksPacks > 0) { S.d.sonderPacks.push({ typ: 'gluecks' }); S.d.gluecksPacks--; }
+  // Kampagne v2: neue Kampfstruktur, alter Fortschritt passt nicht mehr
+  if ((S.d.kampagne.v || 1) < CONFIG.kampagne.version) { S.d.kampagne.fortschritt = {}; S.d.kampagne.v = CONFIG.kampagne.version; }
   S.rng = new Rng(S.d.seed);
   if (S.d.rng) S.rng.setState(S.d.rng);
-  if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 100000; }
+  if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 1000000; }
   baueIndex();
   S.d.team = (S.d.team || []).filter((i) => i < S.karten.length);
 }
@@ -182,12 +196,23 @@ export async function zuruecksetzen() {
 
 // ---------- Packs ----------
 // Öffnet ein Pack: alle Würfe sofort, Pity und Sammlung sofort konsistent. [FEST 10.1]
-export function packOeffnen({ quelle = 'vorrat' } = {}) {
+export function packOeffnen({ quelle = 'vorrat', sonderIndex = null } = {}) {
   if (quelle === 'vorrat') {
     if (S.d.packs <= 0) return null;
     S.d.packs--;
   }
-  const pack = oeffnePack(S.rng, S.d.pity);
+  let sonder = null;
+  if (quelle === 'sonder') {
+    if (sonderIndex == null || !S.d.sonderPacks[sonderIndex]) return null;
+    sonder = S.d.sonderPacks.splice(sonderIndex, 1)[0];
+  }
+  const G = CONFIG.gluecksPack, E = CONFIG.elementPack;
+  const optionen = !sonder ? {} : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
+  const pack = oeffnePack(S.rng, S.d.pity, optionen);
+  pack.sonder = sonder;
+  pack.gluecks = sonder?.typ === 'gluecks';
+  pack.besteVorher = S.d.stat.besteStufe;
+  pack.besteKlasseVorher = S.d.stat.klassen.reduce((m, n, i) => (n > 0 ? i : m), -1);
   S.d.pity = pack.pityNachher;
   pack.eintraege = pack.karten.map((k) => {
     const c = k.karte;
@@ -200,6 +225,8 @@ export function packOeffnen({ quelle = 'vorrat' } = {}) {
     const stufe = kartenSeltenheit(c);
     S.d.stat.stufen[stufe]++;
     S.d.stat.klassen[c.kl]++;
+    if (c.holo !== 'keins') { S.d.stat.holo = S.d.stat.holo || {}; S.d.stat.holo[c.holo] = (S.d.stat.holo[c.holo] || 0) + 1; }
+    if (c.fx.length) S.d.stat.effektKarten = (S.d.stat.effektKarten || 0) + 1;
     if (stufe > S.d.stat.besteStufe) S.d.stat.besteStufe = stufe;
     return { ...k, index: i, neuArt, neuAusf, stufe };
   });
@@ -262,6 +289,54 @@ export function lookAuftragen(i, lookIdx) {
   return true;
 }
 
+// ---------- Verkaufen ----------
+// Entfernt Karten aus der Sammlung (Indizes verschieben sich, Team wird umgerechnet). Teamkarten werden nie verkauft.
+export function verkaufen(indizes) {
+  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i)));
+  if (!weg.size) return { anzahl: 0, muenzen: 0 };
+  let muenzen = 0;
+  const neu = [], umrechnung = new Map();
+  S.karten.forEach((code, i) => {
+    if (weg.has(i)) { muenzen += verkaufswert(dekodiere(code)); return; }
+    umrechnung.set(i, neu.length);
+    neu.push(code);
+  });
+  S.karten = neu;
+  S.d.team = S.d.team.map((i) => umrechnung.get(i)).filter((i) => i != null);
+  S.d.muenzen += muenzen;
+  S.d.stat.verkauft = (S.d.stat.verkauft || 0) + weg.size;
+  baueIndex();
+  aenderung('sammlung');
+  speichernBald(300);
+  return { anzahl: weg.size, muenzen };
+}
+
+// Doppelte, schwache Karten finden: je Monster und Ausführung bleiben die stärksten `behalten` Karten.
+export function doppelteFinden({ behalten = 1, bisKlasse = 1, nurNormal = true, ohneEffekte = true } = {}) {
+  const team = new Set(S.d.team);
+  const out = [];
+  for (const st of S.stapel.values()) {
+    const gruppen = new Map();
+    for (const i of st.idx) {
+      const c = karte(i);
+      const k = ausfuehrungsKey(c);
+      if (!gruppen.has(k)) gruppen.set(k, []);
+      gruppen.get(k).push({ i, c, w: c.kl * 1000 + staerke(c.a) + (c.fx.length ? 1e6 : 0) });
+    }
+    for (const liste of gruppen.values()) {
+      liste.sort((a, b) => b.w - a.w);
+      for (const x of liste.slice(behalten)) {
+        if (team.has(x.i) || x.c.kl > bisKlasse) continue;
+        if (nurNormal && kartenSeltenheit(x.c) > 1) continue;
+        if (ohneEffekte && x.c.fx.length) continue;
+        out.push(x.i);
+      }
+    }
+  }
+  return out;
+}
+export const wertVon = (indizes) => indizes.reduce((s, i) => s + verkaufswert(karte(i)), 0);
+
 // ---------- Team ----------
 export function teamPlaetze(team = S.d.team) {
   let belegt = 0, gesamt = CONFIG.kampf.teamGrundplaetze;
@@ -290,3 +365,10 @@ export function teamAutomatisch() {
 }
 
 export const artName = (id) => ARTEN[id].name;
+
+// Sonderpacks gutschreiben: { gluecks: n, element: n } mit Element el
+export function sonderPacksGeben({ gluecks = 0, element = 0 } = {}, el = 0) {
+  for (let i = 0; i < gluecks; i++) S.d.sonderPacks.push({ typ: 'gluecks' });
+  for (let i = 0; i < element; i++) S.d.sonderPacks.push({ typ: 'element', el });
+  aenderung('packs');
+}

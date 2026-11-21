@@ -14,6 +14,9 @@ export const ATTRIBUTE = [
     icon: '<path d="M4.5 5l7 7-7 7M12 5l7 7-7 7"/>' },
   { key: 'teamplatz', name: 'Teamplatz', info: 'Angriffsmultiplikator, belegt entsprechend viel Platz im Team.',
     icon: '<path d="M5.5 21h13M7 21v-3h10v3M8.3 18l1-7.5h5.4l1 7.5M6.5 10.5V5h2.2v2h2.2V5h2.2v2h2.2V5h2.2v5.5z"/>' },
+  // [Nutzer, 21.11.2026] Heilung: zu Beginn jedes Kampfes einer Runde so viele Lebenspunkte, verteilt auf das eigene Team
+  { key: 'heilung', name: 'Heilung', info: 'Heilt in jeder Runde so viele Lebenspunkte, verteilt auf die am stärksten verletzten Verbündeten.',
+    icon: '<path d="M12 20.5s-7.5-4.8-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.4-7.5 10.2-7.5 10.2z"/><path d="M12 10.5v6M9 13.5h6"/>' },
   { key: 'kapazitaet', name: 'Teamkapazität', info: 'Optional. Bringt dem Team zusätzliche Plätze mit.',
     icon: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 20.5c0-4 2.8-6.5 6.2-6.5s6.2 2.5 6.2 6.5"/><path d="M19 7.5v7M15.5 11h7"/>' },
 ];
@@ -26,5 +29,5 @@ export function attrIcon(key, cls = '') {
 }
 
 export function leereAttribute() {
-  return { kraft: 0, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 };
+  return { kraft: 0, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, heilung: 0, kapazitaet: 0 };
 }

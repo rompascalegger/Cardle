@@ -1,85 +1,243 @@
 // Kampagne (Welten, Bosse) und Kampfansicht. [FEST 12] automatischer Kampf, Beschwörung, 5 Leben.
 import { CONFIG, KLASSEN } from '../config.js';
-import { S, karte, teamPlaetze, aenderung, speichernBald } from '../state.js';
+import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben } from '../state.js';
 import { karteElement, esc, zahl } from '../cardview.js';
-import { ELEMENTE, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
+import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
 import { attrIcon } from '../attributes.js';
 import { EFFEKT_BY_KEY } from '../effects.js';
 import { monsterBild } from '../monsterart.js';
 import { Sound } from '../audio.js';
 import { Rng } from '../rng.js';
 import { staerke } from '../rules.js';
-import { WELTEN, kampfNachId, freigeschaltet, gegnerTeam, belohnung, elementNamen } from '../campaign.js';
+import { DIMENSIONEN, KERN_DIM, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
+import { dailyKampf, dailyGegner, dailyTeam, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
+import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
+import { karteVergroessern } from './lupe.js';
 import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend } from '../battle.js';
-import { h, modal, toast, warte, anim, ICON, fmt, fmt1, schuetteln, partikel } from './dom.js';
+import { h, modal, toast, warte, anim, ICON, fmt, fmt1, schuetteln, partikel, konfetti } from './dom.js';
 
 // ---------- Weltkarte ----------
+// ---------- Karte: Dimensionen auf dem Elementrad ----------
+const teamStaerke = () => S.d.team.reduce((x, i) => x + staerke(karte(i).a), 0);
+
 export function kampagneScreen(root, nav) {
-  const wrap = h('section', { class: 'screen kampagne' });
-  const p = teamPlaetze();
   const fort = S.d.kampagne.fortschritt;
-  wrap.append(h('div', { class: 'panel kp-kopf', html: `<h2>Kampagne</h2><span>Team: <b>${S.d.team.length}</b> Karten · Plätze ${p.belegt}/${p.gesamt}</span><span>Siege <b>${S.d.kampagne.siege}</b> · Niederlagen ${S.d.kampagne.niederlagen}</span>` },
-    h('button', { class: 'btn', text: 'Team bearbeiten', onclick: () => nav('team') })));
-  const karteW = h('div', { class: 'welten' });
-  for (const w of WELTEN) {
-    const offen = freigeschaltet(fort, w.kaempfe[0]);
-    const fertig = w.kaempfe.every((k) => fort[k.id]);
-    const box = h('div', { class: 'welt panel' + (offen ? '' : ' gesperrt') + (fertig ? ' fertig' : '') + (w.finale ? ' finale' : ''), style: `--wh:${farbton(w.els[0]).toFixed(0)}` });
-    box.append(h('div', { class: 'welt-kopf', html: `<span class="welt-nr">${w.finale ? '★' : w.nr}</span><div><h3>${esc(w.name)}</h3><div class="welt-els">${w.els.map((e) => `<span class="siegel-klein" style="--el:${farbe(e)}" data-tip="${esc(ELEMENTE[e].name)}">${glyphSVG(e)}</span>`).join('')}<small>${esc(elementNamen(w.els))}</small></div></div>` }));
-    const knoten = h('div', { class: 'welt-knoten' });
-    for (const k of w.kaempfe) {
+  const K = S.d.kampagne;
+  K.weltWahl = K.weltWahl || {};
+  let dim = K.dim ?? 0;
+  if (!dimensionOffen(fort, dim)) dim = 0;
+  let welt = K.weltWahl[dim] || aktuelleWelt(fort, dim);
+  const wrap = h('section', { class: 'screen kampagne' });
+  const kopf = h('div', { class: 'panel kp-kopf' });
+  const karteBox = h('div', { class: 'kp-karte' });
+  const radBox = h('div', { class: 'panel kp-rad' });
+  const dimBox = h('div', { class: 'panel kp-dim' });
+  const weltBox = h('div', { class: 'panel kp-welt' });
+  karteBox.append(radBox, dimBox);
+  wrap.append(kopf, karteBox, weltBox);
+  root.append(wrap);
+
+  const zeichneKopf = () => {
+    const eigene = teamStaerke();
+    const fertig = weltenFertig(fort);
+    const p = teamPlaetze();
+    const naechster = naechsterKampf(fort, dim);
+    kopf.replaceChildren(
+      h('div', { class: 'kp-titel', html: `<h2>Kampagne</h2><span>Welten <b>${fertig}</b> / ${weltenGesamt()}</span><span>Siege <b>${fmt(K.siege)}</b></span><span data-tip="Je mehr Welten fertig sind, desto stärker werden alle Gegner">Gegnerstärke <b>×${zahl(CONFIG.kampagne.fortschrittFaktor(fertig))}</b></span>` }),
+      h('div', { class: 'kp-balken' }, h('i', { style: { width: (fertig / weltenGesamt()) * 100 + '%' } })),
+      h('div', { class: 'kp-team', html: `Dein Team: <b>${S.d.team.length}</b> Karten · Stärke <b>${fmt(eigene)}</b> · Plätze ${p.belegt}/${p.gesamt}` }),
+      h('div', { class: 'kp-knoepfe' },
+        h('button', { class: 'btn', text: 'Team', onclick: () => nav('team') }),
+        h('button', { class: 'btn', text: 'Erfolge', onclick: () => nav('erfolge') }),
+        naechster ? h('button', { class: 'btn primaer', html: `${ICON.schwert} Weiter: ${esc(weltName(naechster.dim, naechster.welt))} · ${esc(naechster.name)}`, onclick: () => vorschau(naechster, nav) }) : null),
+    );
+  };
+
+  // Rad: 32 Dimensionen außen, Kern in der Mitte. Gold zeigt den Fortschritt je Dimension.
+  const zeichneRad = () => {
+    const R = 200, r1 = 120, r2 = 192;
+    const p = (r, a) => `${(R + Math.cos(a) * r).toFixed(1)},${(R + Math.sin(a) * r).toFixed(1)}`;
+    const seg = (i, ra, rb, anteil = 1) => {
+      const a0 = ((i - 0.5) / N) * Math.PI * 2 - Math.PI / 2, a1 = a0 + ((1 / N) * Math.PI * 2);
+      const rr = ra + (rb - ra) * anteil;
+      return `M${p(ra, a0)} L${p(rr, a0)} A${rr},${rr} 0 0 1 ${p(rr, a1)} L${p(ra, a1)} A${ra},${ra} 0 0 0 ${p(ra, a0)}Z`;
+    };
+    let svg = `<svg viewBox="0 0 400 400" class="kp-rad-svg" role="img" aria-label="Karte der Dimensionen">`;
+    for (let d = 0; d < N; d++) {
+      const anteil = weltenFertigIn(fort, d) / DIMENSIONEN[d].welten.length;
+      const a = (d / N) * Math.PI * 2 - Math.PI / 2;
+      svg += `<g class="kp-seg${d === dim ? ' an' : ''}${anteil === 1 ? ' fertig' : ''}" data-d="${d}"><path d="${seg(d, r1, r2)}" fill="${farbe(d, 60, anteil ? 42 : 24)}"/>`;
+      if (anteil) svg += `<path d="${seg(d, r1, r2, anteil)}" fill="url(#gold)" opacity=".55"/>`;
+      svg += `<g transform="translate(${(R + Math.cos(a) * 156 - 9).toFixed(1)} ${(R + Math.sin(a) * 156 - 9).toFixed(1)}) scale(.75)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${GLYPHEN[d]}</g>`;
+      svg += `<title>${esc(dimensionName(d))}: ${weltenFertigIn(fort, d)}/8 Welten</title></g>`;
+    }
+    const kOffen = kernOffen(fort);
+    const kFertig = weltenFertigIn(fort, KERN_DIM);
+    const bereit = DIMENSIONEN.slice(0, KERN_DIM).filter((_, d) => weltenFertigIn(fort, d) >= CONFIG.kern.freiAbWeltenJeDimension).length;
+    svg += `<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset="1" stop-color="#ffb347"/></linearGradient><radialGradient id="kern"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#b45cff"/><stop offset="1" stop-color="#1a0b30"/></radialGradient></defs>`;
+    svg += `<g class="kp-kern${dim === KERN_DIM ? ' an' : ''}${kOffen ? '' : ' zu'}" data-d="${KERN_DIM}"><circle cx="200" cy="200" r="104" fill="url(#kern)" opacity="${kOffen ? 0.95 : 0.35}"/>`;
+    svg += `<text x="200" y="190" text-anchor="middle" class="kp-kern-t">Kern</text><text x="200" y="214" text-anchor="middle" class="kp-kern-s">${kOffen ? `${kFertig}/16 Welten` : `🔒 ${bereit}/32 bereit`}</text><title>Kern-Dimension: offen, wenn in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten fertig sind</title></g></svg>`;
+    radBox.innerHTML = svg;
+    radBox.querySelectorAll('[data-d]').forEach((g) => g.addEventListener('click', () => {
+      const d = Number(g.dataset.d);
+      if (!dimensionOffen(fort, d)) { toast(`Die Kern-Dimension öffnet sich, wenn du in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten abgeschlossen hast (${bereit}/32).`); return; }
+      dim = d; K.dim = d; welt = K.weltWahl[d] || aktuelleWelt(fort, d);
+      Sound.klick(); zeichneAlles();
+    }));
+  };
+
+  const zeichneDim = () => {
+    const D = DIMENSIONEN[dim];
+    const fertig = weltenFertigIn(fort, dim);
+    const glyphe = dim === KERN_DIM ? '★' : glyphSVG(dim);
+    dimBox.replaceChildren(
+      h('div', { class: 'kp-dim-kopf', html: `<span class="siegel-klein gross" style="--el:${dim === KERN_DIM ? '#b45cff' : farbe(dim)}">${glyphe}</span><div><h3>${esc(D.name)}</h3><small>${fertig}/${D.welten.length} Welten · ${dim === KERN_DIM ? 'Gegenpol-Paare aus allen Elementen' : esc(ELEMENTE[dim].bed)}</small></div>` }),
+      h('div', { class: 'kp-welten' }, D.welten.map((w) => {
+        const offen = weltOffen(fort, dim, w.nr), done = weltFertig(fort, dim, w.nr);
+        const n = stufenFertigIn(fort, dim, w.nr);
+        const b = h('button', { class: 'kp-weltkarte' + (w.nr === welt ? ' an' : '') + (done ? ' fertig' : '') + (offen ? '' : ' zu'), style: `background-image:linear-gradient(180deg, rgba(10,6,24,.1), rgba(10,6,24,.85)), url("${weltThema(dim, w.nr)}")`,
+          html: `<span class="kp-wn">${w.nr}</span><b>${esc(w.name)}</b><small>${done ? '✓ abgeschlossen' : offen ? `${n}/10 Stufen` : '🔒 gesperrt'}</small><i class="kp-wb"><i style="width:${n * 10}%"></i></i>` });
+        b.addEventListener('click', () => { if (!offen) { toast('Schließe zuerst die vorige Welt ab.'); return; } welt = w.nr; K.weltWahl[dim] = w.nr; Sound.klick(); zeichneDim(); zeichneWelt(); });
+        return b;
+      })),
+    );
+  };
+
+  const zeichneWelt = () => {
+    const W = DIMENSIONEN[dim].welten[welt - 1];
+    const eigene = teamStaerke();
+    const wb = dim === KERN_DIM ? CONFIG.kern.weltBelohnung(welt) : CONFIG.kampagne.weltBelohnung(welt);
+    const pfad = h('div', { class: 'ebene-pfad stufen' });
+    W.stufen.forEach((k, i) => {
+      if (i) pfad.append(h('i', { class: 'pfad-linie' + (fort[W.stufen[i - 1].id] ? ' an' : '') }));
       const frei = freigeschaltet(fort, k);
-      const b = belohnung(k);
-      knoten.append(h('button', {
-        class: 'knoten' + (k.boss ? ' boss' : '') + (fort[k.id] ? ' gewonnen' : '') + (frei ? '' : ' zu'),
-        disabled: !frei,
-        html: `<b>${esc(k.name)}</b><span>Stärke ~${k.staerke}</span><span>${ICON.herz}${k.leben}</span><em>${ICON.pack}${b.packs} ${ICON.muenze}${b.muenzen}</em>${fort[k.id] ? '<i class="haken">✓</i>' : ''}`,
+      const kw = kampfWerte(k, fort);
+      const sw = schwierigkeit(kw.staerke, eigene);
+      pfad.append(h('button', {
+        class: 'knoten' + (k.zwischenboss ? ' boss' : '') + (k.weltBoss ? ' boss weltboss' : '') + (fort[k.id] ? ' gewonnen' : '') + (frei ? '' : ' zu'),
+        disabled: !frei, style: `--sw:${sw.farbe}`,
+        html: `<b>${esc(k.name)}</b><span>Stärke ${fmt(kw.staerke)}</span><span class="sw">${frei ? esc(sw.name) : '🔒'}</span><span>${ICON.herz}${k.leben}</span>${fort[k.id] ? '<i class="haken">✓</i>' : ''}`,
         onclick: () => vorschau(k, nav),
       }));
-    }
-    box.append(knoten);
-    karteW.append(box);
-  }
-  wrap.append(karteW);
-  root.append(wrap);
+    });
+    weltBox.replaceChildren(
+      h('div', { class: 'kp-weltbanner', style: `background-image:linear-gradient(90deg, rgba(10,6,24,.9), rgba(10,6,24,.2)), url("${weltThema(dim, welt)}")`, html: `<div><small>${esc(DIMENSIONEN[dim].name)} · Welt ${welt}</small><h2>${esc(W.name)}</h2><span>Gegner: ${esc(elementNamen(W.stufen[0].els))}</span></div><div class="kp-weltlohn"><small>Für den Abschluss</small><b>★ ${wb.gluecks} Glückspack${wb.gluecks > 1 ? 's' : ''} · ${wb.element} Elementpack${wb.element > 1 ? 's' : ''} · ${fmt(wb.muenzen)} Münzen</b></div>` }),
+      pfad,
+    );
+  };
+  const zeichneAlles = () => { zeichneKopf(); zeichneRad(); zeichneDim(); zeichneWelt(); };
+  zeichneAlles();
   return {};
 }
 
 function vorschau(k, nav) {
-  const gegner = gegnerTeam(k);
-  const b = belohnung(k);
-  const grid = h('div', { class: 'vs-gegner' }, gegner.map((c) => { const el = karteElement(c, { animiert: false, nurMaus: true, rueckseite: 'info', drehbar: true }); el.classList.add('mini'); return el; }));
-  const p = teamPlaetze();
-  const ok = S.d.team.length > 0 && p.ok;
+  const fort = S.d.kampagne.fortschritt;
+  const daily = !!k.daily;
+  const gegner = daily ? dailyGegner(k) : gegnerTeam(k, fort);
+  const ti = teamInfo(gegner);
+  const kw = daily ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fort);
+  const eigenTeam = daily ? dailyTeam(k.kl).team : S.d.team;
+  const eigene = eigenTeam.reduce((x, i) => x + staerke(karte(i).a), 0);
+  const sw = schwierigkeit(ti.staerke, eigene);
+  const grid = h('div', { class: 'vs-gegner' }, gegner.map((c) => {
+    const el = karteElement(c, { animiert: false, nurMaus: true });
+    el.classList.add('mini');
+    el.addEventListener('click', () => karteVergroessern(c));
+    return el;
+  }));
+  const ok = eigenTeam.length > 0 && (daily || teamPlaetze().ok);
+  const titel = daily ? esc(k.name) : `${esc(weltName(k.dim, k.welt))} · ${esc(k.name)}`;
+  const lohn = daily ? dailyBelohnung(k.kl) : belohnung(k, !fort[k.id]);
   modal({
-    titel: `${esc(k.name)} <small>${k.boss ? 'Boss · ' : ''}${esc(elementNamen(k.els))}</small>`,
-    inhalt: h('div', {}, h('p', { html: `Gegnerische Stärke <b>${fmt(gegner.reduce((x, c) => x + staerke(c.a), 0))}</b> · Leben <b>${k.leben}</b> · Belohnung ${ICON.pack} <b>${b.packs}</b> Packs, ${ICON.muenze} <b>${b.muenzen}</b>` }), grid,
-      h('p', { class: 'leise', html: ok ? `Dein Team: ${S.d.team.length} Karten, Stärke ${fmt(S.d.team.reduce((x, i) => x + staerke(karte(i).a), 0))}. Du hast ${CONFIG.kampf.spielerLeben} Leben.` : 'Stelle zuerst ein Team auf.' })),
+    titel,
+    inhalt: h('div', {},
+      h('div', { class: 'vs-vergleich', html: `
+<div><span>Gegnerteam</span><b>${fmt(ti.staerke)}</b><small>${gegner.length} Karten · Plätze ${ti.belegt}/${ti.gesamt} · ${ICON.herz} ${k.leben}</small><small>${ICON.beschwoerung} ${kw.einkommen} je Zug${kw.startBank ? ` · Vorsprung ${kw.startBank}` : ''}</small></div>
+<div class="vs-sw" style="--sw:${sw.farbe}"><b>${esc(sw.name)}</b></div>
+<div><span>${daily ? `Dein ${KLASSEN[k.kl].name}-Team` : 'Dein Team'}</span><b>${fmt(eigene)}</b><small>${eigenTeam.length} Karten · ${ICON.herz} ${CONFIG.kampf.spielerLeben}</small><small>${ICON.beschwoerung} ${CONFIG.kampf.beschwoerungProZug} je Zug</small></div>` }),
+      h('p', { class: 'leise', html: `Elemente: ${esc(elementNamen(k.els))} · Belohnung ${ICON.pack} <b>${lohn.packs}</b> Packs, ${ICON.muenze} <b>${fmt(lohn.muenzen)}</b>${lohn.gluecks ? ` · <span class="gluecks-text">★ ${lohn.gluecks} Glückspack</span>` : ''}${lohn.welt ? ' · <span class="gluecks-text">★ Weltbelohnung</span>' : ''} · Karte antippen zum Vergrößern` }),
+      daily ? h('p', { class: 'leise', text: `Es kämpfen automatisch deine stärksten ${KLASSEN[k.kl].name}-Karten.` }) : null,
+      grid,
+      ok ? null : h('p', { class: 'gold', text: daily ? `Du hast noch keine ${KLASSEN[k.kl].name}-Karten.` : 'Stelle zuerst ein gültiges Team auf.' })),
     klasse: 'breit',
     knoepfe: [
-      { text: 'Team bearbeiten', aktion: () => nav('team') },
-      { text: 'Kämpfen', klasse: 'primaer', disabled: !ok, aktion: () => nav('kampf', { id: k.id }) },
+      daily ? { text: 'Zurück' } : { text: 'Team bearbeiten', aktion: () => nav('team') },
+      { text: 'Kämpfen', klasse: 'primaer', disabled: !ok, aktion: () => nav('kampf', daily ? { daily: k.kl } : { id: k.id }) },
     ],
   });
 }
 
+// ---------- Daily Challenges ----------
+export function dailyScreen(root, nav) {
+  const d = dailyStand();
+  const wrap = h('section', { class: 'screen daily' });
+  const rest = msBisMorgen();
+  wrap.append(h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Daily Challenges</h2><span>Neue Gegner in <b>${Math.floor(rest / 36e5)} h ${Math.floor((rest % 36e5) / 6e4)} min</b></span><span>Serie <b>${d.serie || 0}</b> Tag${d.serie === 1 ? '' : 'e'}</span></div><p class="leise">Jede Klasse hat ihre eigene Challenge. Es kämpfen nur deine Karten genau dieser Klasse gegen ein Team derselben Klasse. Jede Challenge gibt einmal am Tag eine Belohnung.</p>` }));
+  const grid = h('div', { class: 'daily-grid' });
+  KLASSEN.forEach((kl, i) => {
+    const k = dailyKampf(i);
+    const { team, verfuegbar } = dailyTeam(i);
+    const eigene = team.reduce((x, j) => x + staerke(karte(j).a), 0);
+    const ti = teamInfo(dailyGegner(k));
+    const sw = schwierigkeit(ti.staerke, eigene || 1);
+    const l = dailyBelohnung(i);
+    const geschafft = !!d.geschafft[i];
+    const box = h('button', { class: `daily-karte kl-${kl.key}${geschafft ? ' geschafft' : ''}${verfuegbar ? '' : ' zu'}`, style: `--sw:${sw.farbe}`,
+      html: `<span class="daily-klasse">${kl.name}</span><b>Daily ${kl.name} Challenge</b><small>Gegner ${fmt(ti.staerke)} · dein Team ${fmt(eigene)} (${verfuegbar} Karten)</small><span class="sw">${verfuegbar ? esc(sw.name) : 'keine Karten'}</span><em>${ICON.pack}${l.packs} ${ICON.muenze}${fmt(l.muenzen)}${l.gluecks ? ' <span class="gluecks-text">★</span>' : ''}${l.element ? ' +Elementpack' : ''}</em>${geschafft ? '<i class="haken">✓ heute geschafft</i>' : ''}` });
+    box.addEventListener('click', () => { if (!verfuegbar) { toast(`Du hast noch keine ${kl.name}-Karten.`); return; } vorschau(k, nav); });
+    grid.append(box);
+  });
+  wrap.append(grid);
+  root.append(wrap);
+  return {};
+}
+
+// ---------- Erfolge ----------
+export function erfolgeScreen(root) {
+  const wrap = h('section', { class: 'screen erfolge' });
+  const gruppen = [...new Set(ERFOLGE.map((e) => e.gruppe))];
+  const geschafft = ERFOLGE.filter((e) => S.d.erfolge[e.id]).length;
+  wrap.append(h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Erfolge</h2><span><b>${geschafft}</b> / ${ERFOLGE.length} freigeschaltet</span></div>` }));
+  for (const g of gruppen) {
+    const box = h('div', { class: 'panel erfolg-gruppe' }, h('h3', { text: g }));
+    const liste = h('div', { class: 'erfolg-liste' });
+    for (const e of ERFOLGE.filter((x) => x.gruppe === g)) {
+      const fertig = !!S.d.erfolge[e.id];
+      const w = Math.min(e.ziel, e.wert());
+      liste.append(h('div', { class: 'erfolg' + (fertig ? ' fertig' : ''), html: `<span class="erfolg-orden">${fertig ? '★' : '☆'}</span><div><b>${esc(e.name)}</b><small>${esc(e.text)}</small><i class="erfolg-balken"><i style="width:${(w / e.ziel) * 100}%"></i></i></div><div class="erfolg-lohn"><small>${fertig ? 'erhalten' : `${fmt(w)}/${fmt(e.ziel)}`}</small><span>${esc(lohnText(e.lohn))}</span></div>` }));
+    }
+    box.append(liste);
+    wrap.append(box);
+  }
+  root.append(wrap);
+  return {};
+}
+
+// Erfolge melden (Toast mit Fanfare)
+export function erfolgeMelden(neu) {
+  neu.forEach((e, i) => setTimeout(() => { Sound.jackpot(5); toast(`<b>★ Erfolg: ${esc(e.name)}</b><br><small>${esc(lohnText(e.lohn))}</small>`, 'erfolg', 4200); }, 600 + i * 900));
+}
+
 // ---------- Kampfansicht ----------
-const TEMPI = [1, 2, 4];
-export function kampfScreen(root, nav, { id }) {
-  const k = kampfNachId(id);
-  if (!k || !S.d.team.length) { nav('kampagne'); return {}; }
+const TEMPI = [1, 2, 3, 5, 10]; // [Nutzer, 21.11.2026] bis ×10
+export function kampfScreen(root, nav, { id, daily = null }) {
+  const fortschritt = S.d.kampagne.fortschritt;
+  const k = daily != null ? dailyKampf(daily) : kampfNachId(id);
+  const eigenTeam = daily != null ? dailyTeam(daily).team : S.d.team;
+  if (!k || !eigenTeam.length) { nav(daily != null ? 'daily' : 'kampagne'); return {}; }
+  const kw = daily != null ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fortschritt);
   const b = neuerKampf({
-    spielerKarten: S.d.team.map(karte), gegnerKarten: gegnerTeam(k), gegnerLeben: k.leben,
-    rng: new Rng(`${S.d.seed}:${id}:${S.d.stat.packs}:${S.d.kampagne.siege + S.d.kampagne.niederlagen}`),
-    gegnerName: k.boss ? k.name : 'Gegner',
+    spielerKarten: eigenTeam.map(karte), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
+    rng: new Rng(`${S.d.seed}:${k.id}:${S.d.stat.packs}:${S.d.kampagne.siege + S.d.kampagne.niederlagen}`),
+    gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank,
   });
   const v = { auswahlHand: null, auswahlFeld: null, phase: 'start', tempoI: S.d.einst.kampfTempo || 0, auto: false, laeuft: false, aus: false };
   const wrap = h('section', { class: 'screen kampf' });
   wrap.innerHTML = `
-<div class="kf-seite gegner"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-hand-zahl"></div></div>
+<div class="kf-seite gegner"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-hand-zahl"></div></div>
 <div class="kf-brett"><div class="kf-spalten"></div><div class="kf-flug"></div></div>
 <div class="kf-mitte"><span class="kf-zug"></span><span class="kf-phase"></span></div>
-<div class="kf-seite spieler"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-knoepfe"></div></div>
+<div class="kf-seite spieler"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-knoepfe"></div></div>
 <div class="kf-hand"></div>
 <details class="kf-log"><summary>Kampfprotokoll</summary><div class="kf-log-inhalt"></div></details>`;
   root.append(wrap);
@@ -92,7 +250,7 @@ export function kampfScreen(root, nav, { id }) {
   const kachel = (u) => {
     const bild = monsterBild(u.art, false);
     const el = angezeigtesEl(u, 0);
-    const t = h('div', { class: `einheit kl-${KLASSEN[u.c.kl].key}${u.seite ? ' feind' : ''}`, 'data-uid': u.uid, style: `--el:${farbe(el)};--elh:${farbton(el).toFixed(0)}` });
+    const t = h('div', { class: `einheit kl-${KLASSEN[u.c.kl].key}${u.seite ? ' feind' : ''}${u.fx.length ? ' mit-fx fx-' + u.fx.length : ''}`, 'data-uid': u.uid, style: `--el:${farbe(el)};--elh:${farbton(el).toFixed(0)}` });
     t.innerHTML = `<div class="eh-bild"><img src="${bild.bg}" alt=""><img class="eh-fg" src="${bild.fg}" alt=""></div>
 <div class="eh-siegel" data-tip="${esc(ELEMENTE[el].name)}">${glyphSVG(el)}</div>
 <div class="eh-name">${esc(u.name)}</div>
@@ -110,7 +268,7 @@ export function kampfScreen(root, nav, { id }) {
     t.classList.toggle('verletzt', rest / max < 0.35);
     const w = werte(b, u);
     const z = (key, wert, tip) => `<span data-tip="${tip}: ${wert}">${attrIcon(key)}<b>${wert}</b></span>`;
-    t.querySelector('.eh-werte').innerHTML = z('kraft', w.kraft, 'Elementarkraft') + z('schutz', w.schutz, 'Elementarschutz') + z('wildheit', w.wild, 'Wildheit') + z('schlagzahl', w.schlag, 'Schlagzahl') + (w.groesse ? z('groesse', w.groesse, 'Größe') : '') + (w.selt ? z('seltsamkeit', w.selt, 'Seltsamkeit') : '') + (w.mult > 1 ? `<span data-tip="Teamplatz-Multiplikator">×${zahl(w.mult)}</span>` : '');
+    t.querySelector('.eh-werte').innerHTML = z('kraft', w.kraft, 'Elementarkraft') + z('schutz', w.schutz, 'Elementarschutz') + z('wildheit', w.wild, 'Wildheit') + z('schlagzahl', w.schlag, 'Schlagzahl') + (w.groesse ? z('groesse', w.groesse, 'Größe') : '') + (w.selt ? z('seltsamkeit', w.selt, 'Seltsamkeit') : '') + (u.a.heilung ? z('heilung', u.a.heilung, 'Heilung je Runde') : '') + (w.mult > 1 ? `<span data-tip="Teamplatz-Multiplikator">×${zahl(w.mult)}</span>` : '');
     const fx = [...u.fx, ...(u.kopie ? [u.kopie] : [])];
     t.querySelector('.eh-fx').innerHTML = fx.map((key) => { const e = EFFEKT_BY_KEY[key]; const an = b.zug >= u.aktivAb && u.gebanntZug !== b.zug; return `<span class="${an ? 'an' : ''}" data-tip="${esc(e.name)}${an ? '' : ' (noch nicht aktiv)'}: ${esc(e.wirkung)}">${e.blitz ? '⚡' : '✦'}</span>`; }).join('');
     const el = angezeigtesEl(u, 0);
@@ -128,8 +286,8 @@ export function kampfScreen(root, nav, { id }) {
       const sp = h('div', { class: 'kf-spalte', 'data-i': i });
       const sg = h('div', { class: 'slot g' }), ss = h('div', { class: 'slot s' });
       if (g.feld[i]) sg.append(kachel(g.feld[i]));
-      if (p.feld[i]) ss.append(kachel(p.feld[i]));
-      ss.addEventListener('click', () => slotKlick(i));
+      if (p.feld[i]) { const t = kachel(p.feld[i]); t.addEventListener('pointerdown', (e) => ziehStart(e, 'feld', i, t)); ss.append(t); }
+      ss.addEventListener('click', () => { if (!v.nachZiehen) slotKlick(i); });
       sp.append(sg, h('div', { class: 'kf-linie' }), ss);
       spalten.append(sp);
     }
@@ -153,6 +311,11 @@ export function kampfScreen(root, nav, { id }) {
       box.querySelector('.kf-name').textContent = seite.name;
       box.querySelector('.kf-leben').innerHTML = herzen(s);
       box.querySelector('.kf-bank').innerHTML = `<span data-tip="Beschwörungspunkte (angespart). Pro Zug +${einkommen(b, s)}">${ICON.beschwoerung}<b>${fmt(seite.bank)}</b><small>+${einkommen(b, s)}</small></span>`;
+      // [Nutzer] Stärke im Kampf sichtbar: Leben auf dem Feld und Stärke in der Hand
+      const feld = lebend(seite).reduce((x, u) => x + Math.max(0, restLeben(b, u)), 0);
+      const feldMax = lebend(seite).reduce((x, u) => x + maxLeben(b, u), 0);
+      const hand = seite.hand.reduce((x, u) => x + staerke(u.a), 0);
+      box.querySelector('.kf-staerke').innerHTML = `<span data-tip="Stärke auf dem Feld (verbleibende Lebenspunkte / Maximum) und in der Hand"><b>${fmt1(feld)}</b><small>/${fmt(feldMax)} Feld</small> · <b>${fmt(hand)}</b><small> Hand</small></span>`;
     }
     q('.kf-hand-zahl').innerHTML = `<span data-tip="Karten in der gegnerischen Hand">🂠 ${b.seiten[1].hand.length}</span>`;
     q('.kf-zug').textContent = `Zug ${b.zug}`;
@@ -176,7 +339,9 @@ export function kampfScreen(root, nav, { id }) {
       t.classList.toggle('teuer', !leistbar);
       t.classList.toggle('gewaehlt', v.auswahlHand === i);
       t.append(h('div', { class: 'eh-kosten', html: `${ICON.beschwoerung}${k}` }));
+      t.addEventListener('pointerdown', (e) => ziehStart(e, 'hand', i, t));
       t.addEventListener('click', () => {
+        if (v.nachZiehen) return;
         if (v.phase !== 'spieler' || v.auto) return;
         if (!leistbar) { toast(`Zu wenig Beschwörungspunkte (${k} nötig, ${seite.bank} vorhanden). Ungenutzte Punkte werden angespart.`); return; }
         if (v.auswahlHand === i) { platzieren(i, null); return; }
@@ -205,6 +370,55 @@ export function kampfScreen(root, nav, { id }) {
       zeichneAlles();
     }
   };
+  // ---- Ziehen und Ablegen (Maus und Finger) ----
+  // Handkarte auf ein freies Feld ziehen = beschwören, Feldkarte auf ein anderes Feld ziehen = tauschen
+  let zug = null;
+  const ziehStart = (e, art, wert, el) => {
+    if (v.phase !== 'spieler' || v.auto || (e.button != null && e.button > 0)) return;
+    zug = { art, wert, el, x0: e.clientX, y0: e.clientY, geist: null };
+  };
+  const slotUnter = (x, y) => {
+    const ziel = document.elementFromPoint(x, y);
+    const slot = ziel && ziel.closest('.slot.s');
+    return slot ? Number(slot.parentElement.dataset.i) : null;
+  };
+  const bewegen = (e) => {
+    if (!zug) return;
+    if (!zug.geist) {
+      if (Math.hypot(e.clientX - zug.x0, e.clientY - zug.y0) < 8) return;
+      if (zug.art === 'hand' && effektiveKosten(b, 0, b.seiten[0].hand[zug.wert]) > b.seiten[0].bank) { toast('Zu wenig Beschwörungspunkte für diese Karte.'); zug = null; return; }
+      const r = zug.el.getBoundingClientRect();
+      zug.dx = e.clientX - r.left; zug.dy = e.clientY - r.top;
+      zug.geist = zug.el.cloneNode(true);
+      zug.geist.classList.add('zieh-geist');
+      zug.geist.style.width = r.width + 'px'; zug.geist.style.height = r.height + 'px';
+      document.body.append(zug.geist);
+      zug.el.classList.add('wird-gezogen');
+      wrap.classList.add('zieht', 'zieht-' + zug.art);
+      Sound.schnipp();
+    }
+    e.preventDefault();
+    zug.geist.style.transform = `translate(${e.clientX - zug.dx}px, ${e.clientY - zug.dy}px) rotate(-4deg) scale(1.05)`;
+    const i = slotUnter(e.clientX, e.clientY);
+    spalten.querySelectorAll('.slot.s').forEach((s, k) => s.classList.toggle('drueber', k === i));
+  };
+  const loslassen = async (e) => {
+    if (!zug) return;
+    const z = zug; zug = null;
+    if (!z.geist) return;
+    v.nachZiehen = true; setTimeout(() => { v.nachZiehen = false; }, 50);
+    z.geist.remove(); z.el.classList.remove('wird-gezogen');
+    wrap.classList.remove('zieht', 'zieht-hand', 'zieht-feld');
+    spalten.querySelectorAll('.slot.s.drueber').forEach((s) => s.classList.remove('drueber'));
+    const i = slotUnter(e.clientX, e.clientY);
+    if (i == null || v.phase !== 'spieler') return;
+    if (z.art === 'hand') { if (!b.seiten[0].feld[i]) { v.auswahlHand = null; await platzieren(z.wert, i); } else toast('Dieses Feld ist besetzt. Ziehe die Karte auf ein freies Feld.'); }
+    else if (z.wert !== i) { tausche(b, 0, z.wert, i); Sound.schnipp(); v.auswahlFeld = null; zeichneBrett(); }
+  };
+  addEventListener('pointermove', bewegen, { passive: false });
+  addEventListener('pointerup', loslassen);
+  addEventListener('pointercancel', loslassen);
+
   const slotKlick = (i) => {
     if (v.phase !== 'spieler' || v.auto) return;
     if (v.auswahlHand != null) { if (!b.seiten[0].feld[i]) platzieren(v.auswahlHand, i); return; }
@@ -283,7 +497,7 @@ export function kampfScreen(root, nav, { id }) {
           break;
         }
         case 'dornen': case 'flaeche': { const t = kachelVon(e.ziel); zahlFliegt(t, `−${fmt1(e.schaden ?? 1)}`, 'schaden klein'); const z = findeEinheit(b, e.ziel); if (t && z) aktualisiereKachel(t, z, e.hpNach); break; }
-        case 'atem': { const t = kachelVon(e.uid); blase(t, 'Zweiter Atem!'); Sound.beschwoeren(); await warte(D(300)); break; }
+        case 'atem': { const t = kachelVon(e.uid); blase(t, esc(e.text || 'Zweiter Atem!')); if (t) { const z = findeEinheit(b, e.uid); if (z) aktualisiereKachel(t, z); } Sound.beschwoeren(); await warte(D(300)); break; }
         case 'tod': {
           const t = kachelVon(e.uid);
           Sound.tod();
@@ -346,14 +560,33 @@ export function kampfScreen(root, nav, { id }) {
     zeichneAlles();
     const sieg = b.ende.sieger === 0;
     const fort = S.d.kampagne.fortschritt;
-    const erstSieg = sieg && !fort[k.id];
     let text = `<p>${esc(b.ende.grund)}.</p>`;
+    let weltText = '';
     if (sieg) {
-      const bel = belohnung(k);
-      S.d.packs += bel.packs; S.d.muenzen += bel.muenzen;
-      fort[k.id] = true;
       S.d.kampagne.siege++;
-      text += `<p class="belohnung">${ICON.pack} <b>+${bel.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${bel.muenzen}</b> Münzen</p>${erstSieg ? '<p class="gold">Neuer Fortschritt freigeschaltet!</p>' : ''}`;
+      if (k.daily) {
+        const erst = dailyGeschafft(k.kl);
+        S.d.erfolgeDaily = S.d.erfolgeDaily || {}; S.d.erfolgeDaily[k.kl] = true;
+        if (erst) {
+          const l = dailyBelohnung(k.kl);
+          S.d.packs += l.packs; S.d.muenzen += l.muenzen;
+          sonderPacksGeben({ gluecks: l.gluecks, element: l.element }, k.els[0]);
+          text += `<p class="belohnung">${ICON.pack} <b>+${l.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${fmt(l.muenzen)}</b>${l.gluecks ? ' &nbsp; <span class="gluecks-text">★ +1 Glückspack</span>' : ''}${l.element ? ` &nbsp; +1 ${esc(ELEMENTE[k.els[0]].name)}-Elementpack` : ''}</p>`;
+        } else text += '<p class="leise">Die Belohnung dieser Challenge hast du heute schon bekommen.</p>';
+      } else {
+        const erstSieg = !fort[k.id];
+        const bel = belohnung(k, erstSieg);
+        S.d.packs += bel.packs; S.d.muenzen += bel.muenzen;
+        fort[k.id] = true;
+        text += `<p class="belohnung">${ICON.pack} <b>+${bel.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${fmt(bel.muenzen)}</b> Münzen${erstSieg ? '' : ' <small class="leise">(Wiederholung)</small>'}</p>`;
+        if (bel.welt) {
+          const el = themaElement(k.dim, k.welt);
+          sonderPacksGeben({ gluecks: bel.welt.gluecks, element: bel.welt.element }, el);
+          S.d.muenzen += bel.welt.muenzen;
+          weltText = `<div class="welt-geschafft" style="background-image:linear-gradient(90deg, rgba(10,6,24,.85), rgba(10,6,24,.3)), url('${weltThema(k.dim, k.welt)}')"><small>Welt abgeschlossen</small><h3>${esc(weltName(k.dim, k.welt))}</h3><p>★ <b>${bel.welt.gluecks}</b> Glückspack${bel.welt.gluecks > 1 ? 's' : ''} · <b>${bel.welt.element}</b> ${esc(ELEMENTE[el].name)}-Elementpack${bel.welt.element > 1 ? 's' : ''} · <b>${fmt(bel.welt.muenzen)}</b> Münzen</p></div>`;
+          setTimeout(() => { konfetti(220); Sound.jackpot(9); }, 400);
+        }
+      }
       Sound.sieg();
       const r = wrap.getBoundingClientRect();
       partikel(r.left + r.width / 2, r.top + r.height / 3, { anzahl: 70, weite: 380 });
@@ -362,17 +595,29 @@ export function kampfScreen(root, nav, { id }) {
       text += '<p>Tipp: Öffne mehr Packs, nutze Gegenpol-Vorteile (×2,5) und Karten mit Wildheit, um gezielt anzugreifen.</p>';
       Sound.niederlage();
     }
+    const neueErfolge = pruefeErfolge();
+    if (neueErfolge.length) text += `<div class="erfolg-neu"><b>Neue Erfolge</b>${neueErfolge.map((e) => `<div>★ ${esc(e.name)} <small>${esc(lohnText(e.lohn))}</small></div>`).join('')}</div>`;
     aenderung('kampf'); speichernBald(200);
+    // Schließen (×, Escape, Klick daneben) führt zurück zur Karte bzw. zu den Dailys
+    const zurueck = k.daily ? 'daily' : 'kampagne';
+    let gewaehlt = false;
+    const geh = (ziel, params) => () => { gewaehlt = true; nav(ziel, params); };
+    const naechster = sieg && !k.daily ? naechsterKampf(fort, k.dim) : null;
+    const knoepfe = [{ text: 'Nochmal', aktion: geh('kampf', k.daily ? { daily: k.kl } : { id: k.id }) }];
+    if (sieg) knoepfe.push({ text: 'Packs öffnen', aktion: geh('packs') });
+    knoepfe.push({ text: k.daily ? 'Zu den Dailys' : 'Zur Karte', klasse: naechster ? '' : 'primaer', aktion: geh(zurueck) });
+    if (naechster) knoepfe.push({ text: `Weiter: ${esc(weltName(naechster.dim, naechster.welt))} · ${esc(naechster.name)}`, klasse: 'primaer', aktion: () => { gewaehlt = true; vorschau(naechster, nav); } });
     modal({
-      titel: sieg ? 'Sieg!' : b.ende.sieger === -1 ? 'Unentschieden' : 'Niederlage',
-      inhalt: text, klasse: sieg ? 'sieg' : 'niederlage', schliessbar: false,
-      knoepfe: [{ text: 'Nochmal', aktion: () => nav('kampf', { id: k.id }) }, { text: sieg ? 'Packs öffnen' : 'Zur Kampagne', klasse: 'primaer', aktion: () => nav(sieg ? 'packs' : 'kampagne') }],
+      titel: sieg ? (weltText ? 'Welt abgeschlossen!' : 'Sieg!') : b.ende.sieger === -1 ? 'Unentschieden' : 'Niederlage',
+      inhalt: weltText + text, klasse: sieg ? 'sieg' : 'niederlage',
+      knoepfe,
+      onClose: () => { if (!gewaehlt) nav(zurueck); },
     });
   };
 
   zeichneAlles();
   neuerZug();
-  return { verlassen: () => { v.aus = true; } };
+  return { verlassen: () => { v.aus = true; removeEventListener('pointermove', bewegen); removeEventListener('pointerup', loslassen); removeEventListener('pointercancel', loslassen); } };
 }
 
 export { lebend };

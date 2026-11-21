@@ -8,18 +8,22 @@ import { packsScreen } from './ui/packs.js';
 import { autoScreen } from './ui/auto.js';
 import { sammlungScreen } from './ui/sammlung.js';
 import { teamScreen } from './ui/team.js';
-import { kampagneScreen, kampfScreen } from './ui/kampagne.js';
+import { kampagneScreen, kampfScreen, dailyScreen, erfolgeScreen, erfolgeMelden } from './ui/kampagne.js';
+import { pruefeErfolge } from './erfolge.js';
 import { radScreen } from './ui/rad.js';
 import { einstellungen } from './ui/einst.js';
+import { hilfe } from './ui/hilfe.js';
 import { ladeSprites } from './sprites.js';
 import { galerieScreen } from './ui/galerie.js';
 
 const SCREENS = {
   packs: { titel: 'Packs', f: packsScreen },
   auto: { titel: 'Auto-Öffnen', f: autoScreen },
-  sammlung: { titel: 'Sammlung', f: sammlungScreen },
+  sammlung: { titel: 'Album', f: sammlungScreen },
   team: { titel: 'Team', f: teamScreen },
   kampagne: { titel: 'Kampagne', f: kampagneScreen },
+  daily: { titel: 'Daily', f: dailyScreen },
+  erfolge: { titel: 'Erfolge', f: erfolgeScreen },
   rad: { titel: 'Elementrad', f: radScreen },
   kampf: { titel: 'Kampf', f: kampfScreen, versteckt: true },
   galerie: { titel: 'Galerie', f: galerieScreen, versteckt: !DEBUG },
@@ -54,8 +58,9 @@ function kopfleiste() {
   const staub = h('button', { class: 'chip knopf', onclick: () => nav('sammlung') });
   const ton = h('button', { class: 'werkzeug', 'aria-label': 'Ton an/aus' });
   const zahnrad = h('button', { class: 'werkzeug', 'aria-label': 'Einstellungen', 'data-tip': 'Einstellungen', html: ICON.zahnrad, onclick: () => einstellungen(zeichne) });
+  const hilfeBtn = h('button', { class: 'werkzeug hilfe-btn', 'aria-label': 'Hilfe', 'data-tip': 'Hilfe: alles erklärt', text: '?', onclick: () => hilfe() });
   ton.addEventListener('click', () => { S.d.einst.stumm = !S.d.einst.stumm; einstellen(S.d.einst.lautstaerke, S.d.einst.stumm); zeichne(); speichern(); });
-  status.append(muenzen, packs, staub, ton, zahnrad);
+  status.append(muenzen, packs, staub, ton, hilfeBtn, zahnrad);
   const zeichne = () => {
     muenzen.innerHTML = `${ICON.muenze}<b>${fmt(S.d.muenzen)}</b>`;
     packs.innerHTML = `${ICON.pack}<b>${fmt(S.d.packs)}</b>`;
@@ -88,6 +93,8 @@ async function start() {
     const z = location.hash.slice(1);
     if (SCREENS[z] && z !== aktuellName && z !== 'kampf' && !document.querySelector('.oeffnen')) nav(z);
   });
+  // Erfolge regelmäßig prüfen (Sammlung, Funde)
+  setInterval(() => { const neu = pruefeErfolge(); if (neu.length) erfolgeMelden(neu); }, 4000);
   const ziel = (location.hash || '').slice(1).split('?')[0];
   nav(SCREENS[ziel] && ziel !== 'kampf' ? ziel : 'packs');
   document.getElementById('lade').remove();

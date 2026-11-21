@@ -149,11 +149,27 @@ export const Sound = {
     else { rauschen({ dauer: 0.5, typ: 'bandpass', f: 1200, f2: 4800, q: 4, gain: 0.07, hallAnteil: 0.4 }); }
   },
   holo(h) {
+    if (h === 'ghost') {
+      // Geisterhaft: verstimmte Sinustöne mit langem Hall, ein leises Hauchen
+      for (const [f, t] of [[392, 0], [415, 0.05], [587, 0.25], [554, 0.32], [784, 0.55]]) ton({ f, typ: 'sine', dauer: 1.6, gain: 0.05, t, hallAnteil: 0.9, detune: Math.random() * 20 - 10 });
+      rauschen({ dauer: 1.4, typ: 'bandpass', f: 600, f2: 2400, q: 3, gain: 0.04, an: 0.5, hallAnteil: 0.8 });
+      return;
+    }
     const basis = h === 'secret' ? 784 : h === 'holo' ? 659 : 523;
     for (let i = 0; i < (h === 'secret' ? 8 : 5); i++) ton({ f: basis * 2 ** (LEITER[i] / 12), typ: 'sine', dauer: 0.4, gain: 0.05, t: i * 0.05, hallAnteil: 0.6 });
   },
   effekt() { ton({ f: 110, f2: 880, typ: 'sawtooth', dauer: 0.7, gain: 0.05, hallAnteil: 0.5 }); for (let i = 0; i < 6; i++) ton({ f: 1046 * 2 ** (LEITER[i] / 12), typ: 'triangle', dauer: 0.3, gain: 0.05, t: 0.3 + i * 0.07, hallAnteil: 0.6 }); },
   klasse(kl) { if (kl < 4) return; ton({ f: 140 + kl * 30, typ: 'triangle', dauer: 0.9, gain: 0.1, hallAnteil: 0.5 }); ton({ f: (140 + kl * 30) * 3.01, typ: 'sine', dauer: 1.2, gain: 0.04, hallAnteil: 0.6 }); },
+  // Jackpot: Münzregen und aufsteigende Fanfare, länger und voller mit der Wucht
+  jackpot(wucht = 4) {
+    const n = Math.min(16, 4 + wucht * 2);
+    for (let i = 0; i < n; i++) {
+      ton({ f: 1318 + Math.random() * 600, typ: 'square', dauer: 0.06, gain: 0.025, t: i * 0.055, hallAnteil: 0.2 });
+      ton({ f: 1975 + Math.random() * 400, typ: 'square', dauer: 0.08, gain: 0.02, t: i * 0.055 + 0.03, hallAnteil: 0.3 });
+    }
+    [0, 4, 7, 12, 16, 19, 24].slice(0, Math.min(7, wucht)).forEach((hton, i) => ton({ f: freq(hton, 392), typ: 'triangle', dauer: 0.5 + i * 0.05, gain: 0.07, t: 0.1 + i * 0.09, hallAnteil: 0.5 }));
+    if (wucht >= 7) this.chor(523, Math.min(14, wucht + 3));
+  },
   wumms() { ton({ f: 70, f2: 35, typ: 'sine', dauer: 0.6, gain: 0.3, hallAnteil: 0.2 }); rauschen({ dauer: 0.4, typ: 'lowpass', f: 400, gain: 0.25 }); },
   klick() { ton({ f: 1200, typ: 'triangle', dauer: 0.03, gain: 0.05, hallAnteil: 0 }); },
   muenze() { ton({ f: 1568, typ: 'square', dauer: 0.07, gain: 0.03, hallAnteil: 0.1 }); ton({ f: 2093, typ: 'square', dauer: 0.12, gain: 0.03, t: 0.06, hallAnteil: 0.2 }); },

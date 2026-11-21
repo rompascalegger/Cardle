@@ -332,3 +332,102 @@
 /* Weniger Bewegung */
 .wenig-bewegung .k-gl0, .wenig-bewegung .k-gl1, .wenig-bewegung .look-glitch .k-fg,
 .wenig-bewegung .holo-secret .k-vorne::after, .wenig-bewegung .kl-diamond .k-rahmen, .wenig-bewegung .rs-rad { animation: none !important; }
+
+/* Ghost Rare [Nutzer, 21.11.2026]: blasse, durchscheinende Karte, das Monster als schimmerndes Geisterbild */
+.holo-ghost { --par: -10%; }
+.holo-ghost .k-panel {
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, .0) 30%, rgba(255, 255, 255, .22) calc(var(--px, 50%) - 10%), rgba(200, 225, 255, .3) var(--px, 50%), rgba(255, 220, 255, .18) calc(var(--px, 50%) + 8%), rgba(255, 255, 255, 0) 80%),
+    linear-gradient(180deg, rgba(225, 235, 250, .2), rgba(160, 175, 205, .12)),
+    linear-gradient(180deg, #2a2f45, #171a2b);
+}
+.holo-ghost .k-rahmen { background: linear-gradient(135deg, #dfe8f5, #ffffff 25%, #b8c6da 45%, #ffffff 60%, #c9d4e6 80%, #f2f6fb); filter: saturate(.6); }
+.holo-ghost .k-rahmen::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(110deg, hsl(0 100% 85%) 0%, hsl(60 100% 85%) 3%, hsl(140 100% 85%) 6%, hsl(200 100% 88%) 9%, hsl(270 100% 88%) 12%, hsl(330 100% 88%) 15%, hsl(360 100% 85%) 18%) var(--px, 50%) var(--py, 50%) / 300% 300%;
+  mix-blend-mode: soft-light; opacity: calc(.4 + var(--glanz, 0) * .5);
+}
+.holo-ghost .k-bild-inhalt { filter: invert(var(--inv, 0)) saturate(calc(var(--sat, 1) * .25)) brightness(1.18) contrast(.95) hue-rotate(var(--hue, 0deg)); }
+.holo-ghost .k-fg { opacity: .82; filter: drop-shadow(7px -5px 0 rgba(200, 230, 255, .45)) drop-shadow(-7px 5px 0 rgba(255, 205, 255, .35)) drop-shadow(0 0 10px rgba(220, 240, 255, .8)); animation: geist 4s ease-in-out infinite; }
+@keyframes geist { 50% { opacity: .62; transform: translateY(-2%); } }
+.holo-ghost .k-holo {
+  display: block; z-index: 2;
+  background-image:
+    linear-gradient(115deg, transparent 25%, rgba(255, 255, 255, .75) calc(var(--px, 50%) - 6%), rgba(190, 225, 255, .8) var(--px, 50%), rgba(255, 215, 255, .7) calc(var(--px, 50%) + 6%), transparent 75%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .12) 0 1px, transparent 1px 4px),
+    var(--glitzer);
+  background-size: 100% 100%, 100% 100%, 90px 90px;
+  mix-blend-mode: overlay;
+  opacity: calc(.55 + var(--glanz, 0) * .45);
+}
+.holo-ghost .k-secret {
+  display: block; z-index: 5; border-radius: inherit;
+  background: radial-gradient(circle at var(--px, 50%) var(--py, 50%), rgba(255, 255, 255, .45), rgba(200, 220, 255, .12) 35%, transparent 65%);
+  mix-blend-mode: screen; opacity: calc(.3 + var(--glanz, 0) * .6);
+}
+.holo-ghost .k-name, .holo-ghost .k-a i { text-shadow: 0 0 8px rgba(220, 240, 255, .9); }
+.holo-i.ghost { background: linear-gradient(90deg, #fff, #cfe3ff, #f3d9ff); }
+.ausf-chip.holo-ghost, .sm-versionen span.ghost { border-color: #e8f2ff; color: #fff; box-shadow: 0 0 8px rgba(220, 240, 255, .6); }
+.wenig-bewegung .holo-ghost .k-fg { animation: none; }
+
+/* Spezialeffekt-Karten: absolut episch [Nutzer, 21.11.2026] */
+@property --fxw { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.karte.hat-fx .k-vorne { box-shadow: 0 0 0 .5cqw #ffd447, 0 0 5cqw rgba(255, 212, 71, .75), 0 0 12cqw rgba(255, 95, 210, .35), 0 1.6cqw 5cqw rgba(0, 0, 0, .5); animation: fxPuls 2.2s ease-in-out infinite; }
+.karte.hat-fx .k-vorne::before {
+  content: ''; position: absolute; inset: 0; z-index: 8; border-radius: inherit; padding: 1.3cqw; pointer-events: none;
+  background: conic-gradient(from var(--fxw), #ffd447, #ff5fd2, #5ffff0, #fff6c8, #ff9b2f, #ffd447);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: fxRand 3s linear infinite;
+}
+.karte.hat-fx .k-bild::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 230, 140, .95) 0 1.2px, transparent 2px) 0 0 / 14% 18%, radial-gradient(circle, rgba(255, 160, 240, .8) 0 1px, transparent 1.8px) 7% 9% / 17% 21%;
+  mix-blend-mode: screen; animation: fxFunken 3.5s linear infinite; opacity: .9;
+}
+.karte.hat-fx .k-fx-b { background: linear-gradient(100deg, rgba(255, 212, 71, .25) 0%, rgba(255, 212, 71, .25) 40%, rgba(255, 255, 255, .7) 50%, rgba(255, 212, 71, .25) 60%) 0 0 / 300% 100%; animation: fxBanner 2.4s linear infinite; box-shadow: 0 0 2.5cqw rgba(255, 212, 71, .5); }
+.karte.fx-2 .k-vorne { animation-duration: 1.5s; }
+.karte.fx-3 .k-vorne { animation-duration: 1s; box-shadow: 0 0 0 .7cqw #fff3b0, 0 0 7cqw rgba(255, 212, 71, .9), 0 0 18cqw rgba(255, 95, 210, .55), 0 1.6cqw 5cqw rgba(0, 0, 0, .5); }
+.karte.fx-3 .k-bild-inhalt::before {
+  content: ''; position: absolute; inset: -20%; z-index: 0;
+  background: repeating-conic-gradient(from var(--fxw), rgba(255, 230, 140, .45) 0deg 6deg, transparent 6deg 18deg);
+  animation: fxRand 8s linear infinite; mix-blend-mode: screen;
+}
+.karte.fx-3 .k-bg { z-index: -1; }
+@keyframes fxRand { to { --fxw: 360deg; } }
+@keyframes fxPuls { 50% { filter: brightness(1.12) saturate(1.2); } }
+@keyframes fxFunken { from { background-position: 0 100%, 7% 109%; } to { background-position: 0 0, 7% 9%; } }
+@keyframes fxBanner { to { background-position: -300% 0; } }
+.wenig-bewegung .karte.hat-fx .k-vorne, .wenig-bewegung .karte.hat-fx .k-vorne::before, .wenig-bewegung .karte.hat-fx .k-bild::after, .wenig-bewegung .karte.hat-fx .k-fx-b, .wenig-bewegung .karte.fx-3 .k-bild-inhalt::before { animation: none !important; }
+/* Rangabzeichen (Winkel) für Effekte und goldene Tresse */
+.k-streifen { position: absolute; top: 36%; z-index: 9; width: 8cqw; display: flex; flex-direction: column; gap: .5cqw; pointer-events: auto; filter: drop-shadow(0 .4cqw .6cqw rgba(0, 0, 0, .6)) drop-shadow(0 0 1.5cqw rgba(255, 212, 71, .7)); }
+.k-streifen.links { left: -.6cqw; }
+.k-streifen.rechts { right: -.6cqw; transform: scaleX(-1); }
+.k-streifen svg { width: 100%; height: auto; display: block; }
+.karte.hat-fx .k-panel { box-shadow: inset 0 0 0 .5cqw rgba(0, 0, 0, .4), inset 0 0 0 1.1cqw #ffd447, inset 0 0 0 1.5cqw #7a4a08, inset 0 0 4cqw rgba(255, 212, 71, .35); }
+.karte.hat-fx .k-panel::after { content: ''; position: absolute; inset: .3cqw; border-radius: inherit; pointer-events: none; border: .5cqw dashed rgba(255, 246, 200, .55); }
+
+/* Diamond: kristallin, facettiert, unverwechselbar [Nutzer, 21.11.2026] */
+.kl-diamond {
+  --rahmen: var(--facetten) 0 0 / 46px 46px, var(--glitzer) 0 0 / 70px 70px, conic-gradient(from var(--dia), #a9e4ff, #ffffff, #cfc2ff, #aef8ec, #ffffff, #ffd2ef, #a9e4ff);
+  --kl: #e8f8ff;
+}
+.kl-diamond .k-rahmen { animation: diaDreh 6s linear infinite, diaGlitzer 5s linear infinite; }
+@keyframes diaGlitzer { to { background-position: 46px 46px, -70px 140px, 0 0; } }
+.kl-diamond .k-rahmen::after {
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, .95) 48%, rgba(200, 240, 255, .9) 50%, transparent 63%);
+  background-size: 300% 100%; mix-blend-mode: screen; opacity: .9; animation: brillanz 3.2s ease-in-out infinite;
+}
+@keyframes brillanz { 0% { background-position: 160% 0; } 55%, 100% { background-position: -120% 0; } }
+.kl-diamond .k-vorne { box-shadow: 0 0 0 .4cqw #ffffff, 0 0 4cqw rgba(190, 235, 255, .9), 0 0 10cqw rgba(200, 180, 255, .45), 0 1.6cqw 5cqw rgba(0, 0, 0, .5); }
+.kl-diamond .k-panel { box-shadow: inset 0 0 0 .5cqw rgba(255, 255, 255, .75), inset 0 0 0 1cqw rgba(170, 220, 255, .35), inset 0 0 5cqw rgba(190, 235, 255, .35); }
+.kl-diamond .k-staerke {
+  border-radius: 0; min-width: 13.5cqw; height: 12cqw; padding: 0 1cqw;
+  clip-path: polygon(22% 0, 78% 0, 100% 34%, 50% 100%, 0 34%);
+  background: var(--facetten) 0 0 / 30px 30px, linear-gradient(160deg, #ffffff, #bfe9ff 40%, #d9c8ff 62%, #ffffff);
+  box-shadow: none; filter: drop-shadow(0 0 1.5cqw rgba(190, 235, 255, .95));
+}
+.kl-diamond .k-staerke b { margin-top: -2.6cqw; }
+.kl-diamond .k-kl { background: linear-gradient(90deg, #bfe9ff, #ffffff, #d9c8ff, #b8fff0); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 900; }
+.einheit.kl-diamond { box-shadow: 0 0 14px rgba(190, 235, 255, .9), 0 6px 16px rgba(0, 0, 0, .45); }
+.wenig-bewegung .kl-diamond .k-rahmen, .wenig-bewegung .kl-diamond .k-rahmen::after { animation: none !important; }

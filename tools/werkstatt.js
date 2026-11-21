@@ -56,7 +56,7 @@ const ROLLE_EN = {
   angreifer: ['aggressive', 'sharp claws and fangs'], tank: ['armored', 'thick protective armor plates'],
   wildling: ['feral', 'wild untamed spines or fur'], riese: ['giant', 'a heavy towering build'],
   sonderling: ['strange', 'odd mysterious proportions'], wirbler: ['nimble', 'a quick restless pose'],
-  koloss: ['colossal', 'a massive bulky body'], kommandant: ['regal', 'a proud posture and a small crest'],
+  koloss: ['colossal', 'a massive bulky body'], kommandant: ['regal', 'a proud posture and a small crest'], heiler: ['gentle healer', 'a soothing healing aura and soft glowing hands'],
 };
 // Jungtiere sind klein: Größen-Rollen werden dort weicher beschrieben
 const ROLLE_JUNG = { riese: ['chubby', 'a sturdy little build'], koloss: ['plump', 'a round heavy little body'] };
@@ -93,6 +93,7 @@ export function promptFuer(art, stil = einst.stil) {
     `main color ${farbName(P.body)}, ${farbName(P.belly)} belly, ${farbName(P.acc)} accents, ${farbName(P.iris)} eyes`,
     AUGEN_EN[m.augen], MUND_EN[m.mund], KOPF_EN[m.kopf], MUSTER_EN[m.muster],
     m.schwanz ? SCHWANZ_EN[m.schwanz] : '', m.stacheln ? 'a row of spikes along its back' : '',
+    art.silber ? 'rare silver variant with a polished metallic silver sheen and sparkles' : '',
   ].filter(Boolean);
   return `${stil.trim().replace(/\.$/, '')}. Subject: ${teile.join(', ')}. ${BILDAUFBAU}.`;
 }

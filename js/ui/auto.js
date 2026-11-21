@@ -5,11 +5,12 @@ import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { Sound } from '../audio.js';
 import { ARTEN } from '../species.js';
 import { h, toast, ICON, fmt } from './dom.js';
-import { zeremonie } from './packs.js';
+import { karteVergroessern } from './lupe.js';
 
-// [VORSCHLAG 11.3] Auto-Stopp. "Neues Monster" ist ab Werk aus: Bei 640 Arten wäre fast jedes Pack ein Stopp.
-const STANDARD_STOPP = { neuArt: false, neuAusf: false, holo: true, effekt: true, klasseAb: 5, stufeAb: 4 };
-const STOPP_VERSION = 2;
+// [VORSCHLAG 11.3] Besondere Funde werden gezeigt. Ab Werk läuft das Auto-Öffnen danach von selbst weiter (keine Eingaben nötig).
+// "Neues Monster" und Holo sind ab Werk aus: Bei 640 Arten bzw. 15 % Holo je Pack käme sonst ständig eine Unterbrechung.
+const STANDARD_STOPP = { neuArt: false, neuAusf: false, holo: false, effekt: true, klasseAb: 6, stufeAb: 5, anhalten: false, vorrat: true };
+const STOPP_VERSION = 3;
 let lauf = null; // läuft über Bildschirmwechsel hinweg nicht weiter
 
 export function autoScreen(root) {
@@ -26,13 +27,17 @@ export function autoScreen(root) {
   wrap.append(links, rechts);
   root.append(wrap);
 
-  const preis = (i) => CONFIG.wirtschaft.packPreis * CONFIG.autoOeffnen.stufen[i].preisFaktor;
+  // [FEST] jedes automatisch geöffnete Pack kostet Münzen, schneller = teurer.
+  // [OFFEN, Platzhalter] Aus dem Vorrat zahlt man nur die Tempo-Gebühr, sonst wird das Pack zum Packpreis mitgekauft.
+  const preisVorrat = (i) => CONFIG.autoOeffnen.stufen[i].gebuehr;
+  const preis = (i) => CONFIG.wirtschaft.packPreis + preisVorrat(i);
+  const naechsteKosten = () => (st.vorrat && S.d.packs > 0 ? { k: preisVorrat(einst.autoTempo), vorrat: true } : { k: preis(einst.autoTempo), vorrat: false });
   const tempoBox = h('div', { class: 'tempo-wahl' });
   const zeichneTempo = () => {
     tempoBox.replaceChildren(...CONFIG.autoOeffnen.stufen.map((t, i) => h('button', {
       class: 'tempo' + (i === einst.autoTempo ? ' an' : ''),
       onclick: () => { einst.autoTempo = i; zeichneTempo(); speichernBald(); },
-      html: `<b>${t.name}</b><span>${t.packsProSekunde >= 1 ? fmt(t.packsProSekunde) + ' Packs/s' : '1 Pack / ' + Math.round(1 / t.packsProSekunde) + ' s'}</span><em>${ICON.muenze} ${fmt(preis(i))} je Pack</em><small>${fmt(preis(i) * t.packsProSekunde * 60)} / Min.</small>`,
+      html: `<b>${t.name}</b><span>${t.packsProSekunde >= 1 ? fmt(t.packsProSekunde) + ' Packs/s' : '1 Pack / ' + Math.round(1 / t.packsProSekunde) + ' s'}</span><em>${ICON.muenze} ${fmt(preisVorrat(i))} je Pack aus dem Vorrat</em><small>ohne Vorrat ${fmt(preis(i))} (Pack wird gekauft)</small>`,
     })));
   };
   zeichneTempo();
@@ -46,7 +51,8 @@ export function autoScreen(root) {
     h('h2', { text: 'Auto-Öffnen' }),
     h('p', { class: 'leise', text: 'Alle Ergebnisse stehen beim Öffnen fest. Das Tempo ändert nur die Zeit, nicht die Chancen.' }),
     tempoBox,
-    h('h3', { text: 'Anhalten und volle Animation bei' }),
+    h('div', { class: 'stopp-regeln' }, check('vorrat', 'Packs aus dem Vorrat zuerst öffnen')),
+    h('h3', { text: 'Als Fund hervorheben bei' }),
     h('div', { class: 'stopp-regeln' },
       check('neuArt', 'neuem Monster'),
       check('neuAusf', 'neuer Ausführung'),
@@ -54,6 +60,7 @@ export function autoScreen(root) {
       check('effekt', 'Spezialeffekt'),
       auswahl('klasseAb', [[99, 'nie'], ...KLASSEN.map((k, i) => [i, k.name + ' oder besser'])], 'Stärkeklasse'),
       auswahl('stufeAb', [[99, 'nie'], ...CONFIG.seltenheit.namen.map((n, i) => [i + 1, n + ' oder besser'])], 'Seltenheit'),
+      check('anhalten', 'bei einem Fund anhalten (sonst läuft es weiter)'),
     ),
     muenzInfo, startBtn,
   );
@@ -62,11 +69,15 @@ export function autoScreen(root) {
   const band = h('div', { class: 'auto-band' });
   const histo = h('div', { class: 'auto-histo' });
   const feed = h('div', { class: 'auto-feed' });
-  rechts.append(h('div', { class: 'panel' }, band, zaehler), h('div', { class: 'panel' }, h('h3', { text: 'Diese Sitzung' }), histo), h('div', { class: 'panel' }, h('h3', { text: 'Besondere Funde' }), feed));
+  const fundBox = h('div', { class: 'panel fund-buehne', hidden: true });
+  rechts.append(fundBox, h('div', { class: 'panel' }, band, zaehler), h('div', { class: 'panel' }, h('h3', { text: 'Diese Sitzung' }), histo), h('div', { class: 'panel' }, h('h3', { text: 'Besondere Funde' }), feed));
 
   const zeichne = () => {
     const t = CONFIG.autoOeffnen.stufen[einst.autoTempo];
-    muenzInfo.innerHTML = `Münzen: <b>${fmt(S.d.muenzen)}</b> · reicht für <b>${fmt(Math.floor(S.d.muenzen / preis(einst.autoTempo)))}</b> Packs (${t.name})`;
+    const ausVorrat = st.vorrat ? Math.min(S.d.packs, Math.floor(S.d.muenzen / preisVorrat(einst.autoTempo))) : 0;
+    const rest = S.d.muenzen - ausVorrat * preisVorrat(einst.autoTempo);
+    const moeglich = ausVorrat + Math.floor(Math.max(0, rest) / preis(einst.autoTempo));
+    muenzInfo.innerHTML = `Vorrat <b>${fmt(S.d.packs)}</b> Packs · Münzen <b>${fmt(S.d.muenzen)}</b> · reicht für <b>${fmt(moeglich)}</b> Packs (${t.name})`;
     startBtn.textContent = lauf ? 'Anhalten' : 'Starten';
     startBtn.classList.toggle('stopp', !!lauf);
     wrap.classList.toggle('laeuft', !!lauf);
@@ -77,25 +88,30 @@ export function autoScreen(root) {
   };
   const zeichneFeed = () => {
     feed.replaceChildren(...sitzung.feed.slice(-16).reverse().map((e) => {
-      const el = karteElement(e.karte, { animiert: false, nurMaus: true, rueckseite: 'info', drehbar: true });
+      const el = karteElement(e.karte, { animiert: false, nurMaus: true });
       el.classList.add('mini');
+      el.addEventListener('click', () => karteVergroessern(e.karte));
       return el;
     }));
-    if (!sitzung.feed.length) feed.append(h('p', { class: 'leise', text: 'Noch nichts Besonderes. Holo, Looks, Effekte, neue Monster und Klassen ab Emerald erscheinen hier.' }));
+    if (!sitzung.feed.length) feed.append(h('p', { class: 'leise', text: 'Noch nichts Besonderes. Holo, Looks, Effekte, neue Monster und Klassen ab Emerald erscheinen hier. Klick auf eine Karte vergrößert sie.' }));
   };
   zeichne(); zeichneFeed();
 
-  const pruefeStopp = (pack) => {
-    for (const e of pack.eintraege) {
+  // Welche Karten eines Packs sind ein Fund? Gibt den Grund und die Karten (Indizes) zurück.
+  const pruefeFund = (pack) => {
+    const fokus = new Set();
+    let grund = null;
+    pack.eintraege.forEach((e, i) => {
       const c = e.karte;
-      if (st.neuArt && e.neuArt) return `neues Monster: ${ARTEN[c.art].name}`;
-      if (st.neuAusf && e.neuAusf) return 'neue Ausführung';
-      if (st.holo && c.holo !== 'keins') return 'Holo-Stufe';
-      if (st.effekt && c.fx.length) return 'Spezialeffekt';
-      if (c.kl >= st.klasseAb) return `Klasse ${KLASSEN[c.kl].name}`;
-      if (e.stufe >= st.stufeAb) return stufenName(e.stufe);
-    }
-    return null;
+      const g = (st.neuArt && e.neuArt) ? `neues Monster: ${ARTEN[c.art].name}`
+        : (st.neuAusf && e.neuAusf) ? 'neue Ausführung'
+          : (st.holo && c.holo !== 'keins') ? 'Holo-Stufe'
+            : (st.effekt && c.fx.length) ? 'Spezialeffekt'
+              : c.kl >= st.klasseAb ? `Klasse ${KLASSEN[c.kl].name}`
+                : e.stufe >= st.stufeAb ? stufenName(e.stufe) : null;
+      if (g) { fokus.add(i); grund ??= g; }
+    });
+    return grund ? { grund, fokus } : null;
   };
 
   let uiTimer = 0;
@@ -110,12 +126,12 @@ export function autoScreen(root) {
     let geoeffnet = 0;
     while (lauf && lauf.faellig >= 1 && geoeffnet < 200) {
       lauf.faellig -= 1;
-      const p = preis(einst.autoTempo);
+      const { k: p, vorrat } = naechsteKosten();
       if (S.d.muenzen < p) { stoppe(); toast('Keine Münzen mehr für das Auto-Öffnen.'); break; }
       S.d.muenzen -= p;
       S.d.stat.muenzenAusgegeben += p;
       sitzung.muenzen += p;
-      const pack = packOeffnen({ quelle: 'auto' });
+      const pack = packOeffnen({ quelle: vorrat ? 'vorrat' : 'auto' });
       geoeffnet++;
       sitzung.packs++;
       for (const e of pack.eintraege) {
@@ -127,8 +143,8 @@ export function autoScreen(root) {
       }
       if (sitzung.feed.length > 60) sitzung.feed.splice(0, sitzung.feed.length - 60);
       fliegePack();
-      const grund = pruefeStopp(pack);
-      if (grund) { stoppe(); zeichne(); zeichneFeed(); aenderung('auto'); speichernBald(300); stoppZeremonie(pack, grund); return; }
+      const fund = pruefeFund(pack);
+      if (fund) { fundZeigen(pack, fund); if (!lauf) { zeichne(); zeichneFeed(); aenderung('auto'); speichernBald(300); return; } }
     }
     if (geoeffnet) { aenderung('auto'); speichernSpaetestens(3000); }
     if (t - uiTimer > 120 && !document.hidden) { uiTimer = t; zeichne(); if (geoeffnet) zeichneFeed(); }
@@ -142,25 +158,46 @@ export function autoScreen(root) {
     Sound.schnipp();
     setTimeout(() => p.remove(), 1200);
   };
-  const stoppZeremonie = async (pack, grund) => {
-    const weiter = await zeremonie(pack, { titel: 'Auto-Stopp: ' + grund, ausAuto: true, auto: true });
-    zeichne();
-    if (weiter === 'weiter' && wrap.isConnected) starte();
+  // Fund zeigen: direkt hier im Auto-Öffnen, ohne Pack-Animation. Das Öffnen läuft weiter (außer "anhalten").
+  let letzterFund = 0;
+  const fundZeigen = (pack, fund) => {
+    const jetzt = performance.now();
+    if (!st.anhalten && jetzt - letzterFund < 1400) return; // bei sehr schnellen Funden nur in die Liste
+    letzterFund = jetzt;
+    const karten = [...fund.fokus].map((i) => pack.eintraege[i]).sort((a, b) => b.stufe - a.stufe || b.karte.kl - a.karte.kl).slice(0, 3);
+    const reihe = h('div', { class: 'fund-reihe' });
+    karten.forEach((e, n) => {
+      const el = karteElement(e.karte, { verdeckt: true, rueckseite: 'logo', maxNeigung: 14 });
+      el.classList.add('fund-karte');
+      el.style.setProperty('--glow', stufenFarbe(e.stufe));
+      el.addEventListener('click', () => karteVergroessern(e.karte));
+      reihe.append(el);
+      setTimeout(() => {
+        el.classList.remove('gedreht');
+        Sound.wenden(e.stufe);
+        setTimeout(() => { Sound.stufe(e.stufe); if (e.karte.holo !== 'keins') Sound.holo(e.karte.holo); if (e.karte.fx.length) Sound.effekt(); }, 450);
+      }, 200 + n * 320);
+    });
+    fundBox.replaceChildren(h('h3', { html: `Fund: <span class="gold">${esc(fund.grund)}</span>` }), reihe, h('p', { class: 'leise', text: 'Karte antippen zum Vergrößern.' }));
+    fundBox.hidden = false;
+    fundBox.classList.remove('neu'); void fundBox.offsetWidth; fundBox.classList.add('neu');
+    if (st.anhalten) { stoppe(); toast('Auto-Öffnen angehalten: ' + fund.grund); }
   };
   const starte = () => {
     if (lauf) return;
-    if (S.d.muenzen < preis(einst.autoTempo)) { toast('Nicht genug Münzen für dieses Tempo.'); return; }
+    if (S.d.muenzen < naechsteKosten().k) { toast('Nicht genug Münzen für dieses Tempo.'); return; }
     lauf = { t: performance.now(), faellig: 1, timer: setInterval(schritt, 50) };
     schritt();
     zeichne();
   };
-  const stoppe = () => {
+  const pausiere = () => {
     if (!lauf) return;
     clearInterval(lauf.timer);
     lauf = null;
-    zeichne();
     speichernBald(200);
   };
+  const stoppe = () => { pausiere(); zeichne(); };
+  let verlassen = false;
   startBtn.addEventListener('click', () => (lauf ? stoppe() : starte()));
-  return { verlassen: stoppe };
+  return { verlassen: () => { verlassen = true; stoppe(); } };
 }

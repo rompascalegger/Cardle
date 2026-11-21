@@ -34,13 +34,13 @@ export function karteHTML(c, opts = {}) {
   const kost = kosten(c);
   const bild = monsterBild(c.art, opts.animiert !== false);
   const looks = LOOKS.map((l, i) => (hatLook(c.looks, i) ? ' look-' + l.key : '')).join('');
-  const attr = ATTRIBUTE.filter((a) => a.key !== 'kapazitaet' || c.a.kapazitaet > 0).map((a) =>
+  const attr = ATTRIBUTE.filter((a) => !['kapazitaet', 'heilung'].includes(a.key) || c.a[a.key] > 0).map((a) =>
     `<span class="k-a${c.a[a.key] ? '' : ' null'}" data-tip="${esc(a.name)}: ${c.a[a.key]}">${attrIcon(a.key)}${CONFIG.zahlNebenSymbol ? `<i>${c.a[a.key]}</i>` : ''}</span>`).join('');
   const fx = c.fx.map((id) => { const e = EFFEKT[id]; return `<span class="k-fx-b${e.blitz ? ' blitz' : ''}" data-tip="${esc(e.name)} (Preis ×${zahl(e.faktor)}): ${esc(e.wirkung)}">${e.blitz ? '⚡' : '✦'} ${esc(e.name)}</span>`; }).join('');
   const kopien = (n, cls) => Array.from({ length: n }, (_, i) => `<img class="${cls} ${cls}${i}" src="${bild.fg}" alt="" draggable="false">`).join('');
   const lookKopien = (hatLook(c.looks, 3) ? kopien(2, 'k-gl') : '') + (hatLook(c.looks, 4) ? kopien(2, 'k-fd') : '');
   const rueck = opts.rueckseite === 'info' ? infoRueckseite(c) : logoRueckseite();
-  return `<div class="karte kl-${kl.key} holo-${c.holo} st-${st}${looks}${c.fx.length ? ' hat-fx' : ''}${opts.verdeckt ? ' gedreht' : ''}${opts.klein ? ' klein' : ''}" style="--elh:${farbton(el).toFixed(0)};--el:${farbe(el)};--stc:${stufenFarbe(st)}" data-stufe="${st}">
+  return `<div class="karte kl-${kl.key} holo-${c.holo} st-${st}${looks}${c.fx.length ? ' hat-fx fx-' + c.fx.length : ''}${opts.verdeckt ? ' gedreht' : ''}${opts.klein ? ' klein' : ''}" style="--elh:${farbton(el).toFixed(0)};--el:${farbe(el)};--stc:${stufenFarbe(st)}" data-stufe="${st}">
 <div class="k-dreh"><div class="k-flip">
 <div class="k-vorne">
  <div class="k-rahmen"></div>
@@ -60,16 +60,25 @@ export function karteHTML(c, opts = {}) {
   <div class="k-fuss"><span>${esc(ELEMENTE[el].name)}</span><span class="k-kl">${kl.name}</span>${kost !== sum ? `<span class="k-kost" data-tip="Beschwörungskosten">◆${kost}</span>` : `<span>#${String(c.art + 1).padStart(3, '0')}</span>`}</div>
  </div>
  <div class="k-secret"></div>
+ ${c.fx.length ? streifenHTML(c.fx.length) : ''}
  <div class="k-glanz"></div>
 </div>
 <div class="k-hinten">${rueck}</div>
 </div></div></div>`;
 }
 
+// Rangabzeichen für Effektkarten: ein goldener Winkel je Effekt, links und rechts am Rahmen [Nutzer, 21.11.2026]
+function streifenHTML(n) {
+  const winkel = Array.from({ length: n }, () => '<svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1 L12 8 L23 1 L23 6 L12 13 L1 6Z" fill="url(#fxgold)" stroke="#3a2400" stroke-width="1.1" stroke-linejoin="round"/></svg>').join('');
+  const defs = '<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="fxgold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset=".45" stop-color="#ffd447"/><stop offset="1" stop-color="#b8780b"/></linearGradient></defs></svg>';
+  return `${defs}<div class="k-streifen links" data-tip="${n} Spezialeffekt${n > 1 ? 'e' : ''}">${winkel}</div><div class="k-streifen rechts">${winkel}</div>`;
+}
+
 export function logoRueckseite() {
   return `<div class="rs-logo"><div class="rs-rad"></div><div class="rs-text">${esc(CONFIG.spielname.toUpperCase())}</div><div class="rs-sub">MONSTER · 32 ELEMENTE</div></div>`;
 }
 
+export function infoHTML(c) { return infoRueckseite(c); }
 function infoRueckseite(c) {
   const art = ARTEN[c.art];
   const el = art.el;
@@ -82,7 +91,7 @@ function infoRueckseite(c) {
   const elName = (v) => ELEMENTE[v].name;
   return `<div class="rs-info">
 <h4>${esc(art.name)}</h4>
-<div class="rs-sub2">${esc(ELEMENTE[el].name)} · ${esc(FORMEN[art.form] || '')} · ${esc(CONFIG.rollen[art.rolle].name)} · ${kl.name}</div>
+<div class="rs-sub2">${esc(ELEMENTE[el].name)} · ${esc(FORMEN[art.form] || '')} · ${esc(CONFIG.rollen[art.rolle].name)} · ${kl.name}${art.silber ? ' · <b class="silber-art">Silber-Monster (selten, nur Silber)</b>' : ''}</div>
 <div class="rs-attr">${ATTRIBUTE.map((a) => `<div>${attrIcon(a.key)}<span>${a.name}</span><b>${c.a[a.key]}</b></div>`).join('')}</div>
 ${zeile('Stärke / Leben', staerke(c.a))}${zeile('Beschwörung', kosten(c))}${zeile('Teamplätze', `${plaetzeBelegt(c)} belegt${plaetzeBringt(c) ? `, +${plaetzeBringt(c)}` : ''}`)}${zeile('Angriff ×', zahl(teamplatzMult(c.a.teamplatz)))}
 <div class="rs-h">Elementrad</div>
@@ -207,6 +216,17 @@ export function initTexturen() {
   for (let i = 0; i < 90; i++) dots += `<circle cx="${(rnd() * 200).toFixed(1)}" cy="${(rnd() * 200).toFixed(1)}" r="${(0.4 + rnd() * 1.3).toFixed(2)}" fill="#fff" opacity="${(0.3 + rnd() * 0.7).toFixed(2)}"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">${dots}</svg>`;
   document.documentElement.style.setProperty('--glitzer', `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+  // Facetten für Diamond: unregelmäßige Dreiecke in Weiß, Eisblau und Violett wie ein geschliffener Kristall
+  let fac = '';
+  const pt = [];
+  for (let y = 0; y <= 6; y++) for (let x = 0; x <= 6; x++) pt.push([x * 20 + (x % 6 ? (rnd() - 0.5) * 12 : 0), y * 20 + (y % 6 ? (rnd() - 0.5) * 12 : 0)]);
+  const P = (x, y) => pt[y * 7 + x];
+  const toene = ['255,255,255', '200,240,255', '225,215,255', '210,255,245', '255,230,250'];
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+    const [a1, b1, c1, d1] = [P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)];
+    for (const tri of [[a1, b1, c1], [a1, c1, d1]]) fac += `<path d="M${tri.map((q) => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' L')}Z" fill="rgb(${toene[Math.floor(rnd() * toene.length)]})" fill-opacity="${(0.15 + rnd() * 0.8).toFixed(2)}" stroke="#fff" stroke-opacity=".7" stroke-width=".6"/>`;
+  }
+  document.documentElement.style.setProperty('--facetten', `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">${fac}</svg>`)}")`);
   let rad = '';
   for (let i = 0; i < 32; i++) rad += `hsl(${farbton(i).toFixed(0)} 80% 58%) ${(i / 32 * 100).toFixed(3)}% ${((i + 1) / 32 * 100).toFixed(3)}%,`;
   document.documentElement.style.setProperty('--rad', `conic-gradient(from -5.6deg, ${rad.slice(0, -1)})`);

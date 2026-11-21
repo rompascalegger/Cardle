@@ -3,28 +3,30 @@ import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN } from '../config.js';
 import { S, packOeffnen, packKaufen, aenderung, speichernBald } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { Sound } from '../audio.js';
-import { farbton, ELEMENTE } from '../elements.js';
+import { farbton, farbe, ELEMENTE } from '../elements.js';
 import { ARTEN } from '../species.js';
 import { monsterBild } from '../monsterart.js';
 import { EFFEKT } from '../effects.js';
 import { klassenGrenzen, holoGrenzen, prozent, pityChance, seltenheitsChancen, einsVon, pHolo, pEffekte } from '../rules.js';
-import { h, warte, anim, toast, schuetteln, partikel, blitzLicht, ICON, fmt } from './dom.js';
+import { h, warte, anim, toast, schuetteln, partikel, blitzLicht, konfetti, ICON, fmt } from './dom.js';
+import { karteVergroessern } from './lupe.js';
 
 const KLASSEN_FARBEN = ['#d4935a', '#dfe5ea', '#ffd23f', '#cfe6f2', '#3ee08f', '#ff4f72', '#4f8dff', '#e8f6ff'];
 const zufallsArt = () => Math.floor(Math.random() * ARTEN.length);
 
-export function packElement(artId = zufallsArt()) {
+export function packElement(artId = zufallsArt(), { gluecks = false, element = null } = {}) {
+  if (element != null) { const pool = ARTEN.filter((a) => a.el === element && !a.silber); artId = pool[Math.floor(Math.random() * pool.length)].id; }
   const bild = monsterBild(artId, true);
   const el = ARTEN[artId].el;
   return h('div', {
-    class: 'pack', 'data-art': artId, style: `--ph:${farbton(el).toFixed(0)}`, html: `
+    class: 'pack' + (gluecks ? ' gluecks' : '') + (element != null ? ' elementpack' : ''), 'data-art': artId, style: `--ph:${gluecks ? 45 : farbton(el).toFixed(0)}`, html: `
 <div class="pack-koerper">
   <div class="pack-folie"></div>
   <div class="pack-rad"></div>
   <img class="pack-motiv" src="${bild.fg}" alt="" draggable="false">
   <div class="pack-logo">${esc(CONFIG.spielname.toUpperCase())}</div>
-  <div class="pack-unter">BOOSTER · ${CONFIG.packGroesse} KARTEN</div>
-  <div class="pack-el">${esc(ELEMENTE[el].name)}-Edition</div>
+  <div class="pack-unter">${gluecks ? `GLÜCKSPACK · ${CONFIG.gluecksPack.karten} KARTEN` : element != null ? `ELEMENTPACK · ${CONFIG.elementPack.karten} KARTEN` : `BOOSTER · ${CONFIG.packGroesse} KARTEN`}</div>
+  <div class="pack-el">${gluecks ? `★ alle Chancen ×${CONFIG.gluecksPack.faktor} ★` : element != null ? `★ nur ${esc(ELEMENTE[el].name)} · Chancen ×${CONFIG.elementPack.faktor} ★` : `${esc(ELEMENTE[el].name)}-Edition`}</div>
   <div class="pack-glanz"></div>
 </div>
 <div class="pack-oeffnung"></div>
@@ -42,7 +44,8 @@ export function packsScreen(root, nav) {
   const vorrat = h('div', { class: 'vorrat' });
   const kauf1 = h('button', { class: 'btn', html: `1 Pack kaufen · ${ICON.muenze} ${CONFIG.wirtschaft.packPreis}` });
   const kauf10 = h('button', { class: 'btn', html: `10 Packs · ${ICON.muenze} ${CONFIG.wirtschaft.packPreis * 10}` });
-  buehne.append(h('div', { class: 'buehne-licht' }), schwebe, h('div', { class: 'pack-aktionen' }, btnOeffnen, vorrat, h('div', { class: 'kauf' }, kauf1, kauf10)));
+  const sonderBox = h('div', { class: 'sonder-packs' });
+  buehne.append(h('div', { class: 'buehne-licht' }), schwebe, h('div', { class: 'pack-aktionen' }, btnOeffnen, sonderBox, vorrat, h('div', { class: 'kauf' }, kauf1, kauf10)));
   const info = h('aside', { class: 'panel pack-info' });
   wrap.append(buehne, info);
   root.append(wrap);
@@ -50,6 +53,14 @@ export function packsScreen(root, nav) {
   const aktualisiere = () => {
     vorrat.innerHTML = `Vorrat: <b>${fmt(S.d.packs)}</b> ${S.d.packs === 1 ? 'Pack' : 'Packs'}`;
     btnOeffnen.disabled = S.d.packs <= 0;
+    // Sonderpacks gruppiert: Glückspacks und Elementpacks je Element
+    const gruppen = new Map();
+    S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'gluecks' ? 'g' : 'e' + sp.el; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
+    sonderBox.replaceChildren(...[...gruppen.values()].map(({ sp, idx }) => h('button', {
+      class: 'btn gluecks-btn' + (sp.typ === 'element' ? ' element-btn' : ''), style: sp.typ === 'element' ? `--el:${farbe(sp.el)}` : '',
+      html: sp.typ === 'gluecks' ? `★ Glückspack öffnen (${idx.length})` : `${esc(ELEMENTE[sp.el].name)}-Elementpack öffnen (${idx.length})`,
+      onclick: () => sonderOeffnen(idx[0]),
+    })));
     kauf1.disabled = S.d.muenzen < CONFIG.wirtschaft.packPreis;
     kauf10.disabled = S.d.muenzen < CONFIG.wirtschaft.packPreis * 10;
     info.innerHTML = infoHTML();
@@ -68,6 +79,16 @@ export function packsScreen(root, nav) {
     aktualisiere();
   };
   btnOeffnen.addEventListener('click', oeffnen);
+  const sonderOeffnen = async (index) => {
+    const pack = packOeffnen({ quelle: 'sonder', sonderIndex: index });
+    if (!pack) return;
+    aenderung('pack'); speichernBald(300);
+    Sound.rascheln();
+    const sp = pack.sonder;
+    await zeremonie(pack, { titel: sp.typ === 'gluecks' ? `Glückspack · alle Chancen ×${CONFIG.gluecksPack.faktor}` : `${ELEMENTE[sp.el].name}-Elementpack · Chancen ×${CONFIG.elementPack.faktor}` });
+    schwebe.replaceChildren(packElement());
+    aktualisiere();
+  };
   schwebe.addEventListener('click', oeffnen);
   setzePackNeuzeichnen(() => { schwebe.replaceChildren(packElement()); aktualisiere(); });
   kauf1.addEventListener('click', () => { if (packKaufen(1)) { Sound.muenze(); aktualisiere(); } });
@@ -84,7 +105,7 @@ function infoHTML() {
   return `<h3>Was steckt drin?</h3>
 <div class="chancen">
   <div class="ch-gruppe"><h4>Stärkeklasse</h4>${KLASSEN.map((k, i) => `<div class="ch-z"><i style="background:${KLASSEN_FARBEN[i]}"></i><span>${k.name}</span><b>${prozent(k.chance)}</b></div>`).join('')}</div>
-  <div class="ch-gruppe"><h4>Holo-Stufe</h4>${['reverse', 'holo', 'secret'].map((x) => `<div class="ch-z"><i class="holo-i ${x}"></i><span>${HOLO_NAMEN[x]}</span><b>${prozent(pHolo(x))}</b></div>`).join('')}
+  <div class="ch-gruppe"><h4>Holo-Stufe</h4>${['reverse', 'holo', 'secret', 'ghost'].map((x) => `<div class="ch-z"><i class="holo-i ${x}"></i><span>${HOLO_NAMEN[x]}</span><b>${prozent(pHolo(x))}</b></div>`).join('')}
   <h4>Zusatzlooks</h4><div class="ch-z"><i class="look-i"></i><span>je Look (5 Sorten)</span><b>${prozent(CONFIG.lookChance)}</b></div>
   <h4>Spezialeffekte</h4><div class="ch-z"><i class="fx-i"></i><span>mind. ein Effekt</span><b>${prozent(pEffekte(1) + pEffekte(2) + pEffekte(3))}</b></div></div>
 </div>
@@ -102,12 +123,12 @@ function infoHTML() {
 const LOG_MIN = { klasse: 1e-4, holo: 1e-4, look: 1e-4, effekt: 1e-5 };
 const xPos = (u, min) => { const l = Math.log10(Math.max(u, min)); return Math.max(0, Math.min(1, (l - Math.log10(min)) / -Math.log10(min))); };
 
-function zonenKlasse() {
-  return klassenGrenzen().map((z) => ({ von: z.von, bis: z.bis, farbe: KLASSEN_FARBEN[z.i], label: KLASSEN[z.i].name, gut: z.i >= 3, idx: z.i }));
+function zonenKlasse(mult = 1) {
+  return klassenGrenzen(mult).map((z) => ({ von: z.von, bis: z.bis, farbe: KLASSEN_FARBEN[z.i], label: KLASSEN[z.i].name, gut: z.i >= 3, idx: z.i }));
 }
-function zonenHolo() {
-  const g = holoGrenzen();
-  const f = { secret: 'linear-gradient(90deg,#ff5fd2,#5ffff0,#ffe14d)', holo: 'linear-gradient(90deg,#ff7a7a,#ffe14d,#7aff9a,#7ad8ff,#c27aff)', reverse: 'linear-gradient(90deg,#c9d3dc,#ffffff,#b9e6ff)' };
+function zonenHolo(mult = 1) {
+  const g = holoGrenzen(mult);
+  const f = { ghost: 'linear-gradient(90deg,#ffffff,#cfe3ff,#f3d9ff,#ffffff)', secret: 'linear-gradient(90deg,#ff5fd2,#5ffff0,#ffe14d)', holo: 'linear-gradient(90deg,#ff7a7a,#ffe14d,#7aff9a,#7ad8ff,#c27aff)', reverse: 'linear-gradient(90deg,#c9d3dc,#ffffff,#b9e6ff)' };
   let von = 0;
   return g.map((z) => { const o = { von, bis: z.bis, farbe: f[z.holo], label: HOLO_NAMEN[z.holo], gut: true, holo: z.holo }; von = z.bis; return o; });
 }
@@ -179,12 +200,13 @@ function wurfPanel(eintrag) {
     panel.append(z);
     return { z, erg, ergebnis };
   };
-  const mk = messer('klasse', w.klasse, zonenKlasse());
+  const mult = w.mult || 1;
+  const mk = messer('klasse', w.klasse, zonenKlasse(mult));
   zeilen.push({ ...zeile('Klasse', mk.el, `<b style="color:${KLASSEN_FARBEN[c.kl]}">${KLASSEN[c.kl].name}</b>`), m: [mk], art: 'klasse' });
-  const mh = messer('holo', w.holo, zonenHolo());
+  const mh = messer('holo', w.holo, zonenHolo(mult));
   zeilen.push({ ...zeile('Holo', mh.el, c.holo === 'keins' ? '–' : `<b class="regenbogen">${HOLO_NAMEN[c.holo]}</b>`), m: [mh], art: 'holo' });
   const lookBox = h('div', { class: 'look-messer' });
-  const ml = w.looks.map((u) => { const m = messer('look', u, [{ von: 0, bis: CONFIG.lookChance, farbe: '#ffd447', label: 'Look', gut: true }], { duenn: true, ohneWert: true }); lookBox.append(m.el); return m; });
+  const ml = w.looks.map((u) => { const m = messer('look', u, [{ von: 0, bis: CONFIG.lookChance * mult, farbe: '#ffd447', label: 'Look', gut: true }], { duenn: true, ohneWert: true }); lookBox.append(m.el); return m; });
   const gefunden = LOOKS.filter((_, i) => c.looks & (1 << i)).map((l) => l.kurz);
   zeilen.push({ ...zeile('Looks', lookBox, gefunden.length ? `<b class="gold">${gefunden.join(', ')}</b>` : '–'), m: ml, art: 'looks' });
   const me = messer('effekt', w.effekt, [{ von: 0, bis: w.effektChance, farbe: 'linear-gradient(90deg,#ffd447,#ff9b2f)', label: 'Effekt', gut: true }], { erzwungen: w.pity });
@@ -193,8 +215,14 @@ function wurfPanel(eintrag) {
 }
 
 // ---------- Zeremonie ----------
-export function zeremonie(pack, { artId = zufallsArt(), titel = null, auto = false, ausAuto = false } = {}) {
-  return new Promise((resolve) => new Zeremonie(pack, artId, titel, auto, resolve, ausAuto).start());
+// autoAblauf: läuft ohne Eingaben durch (für Auto-Öffnen). fokus: nur diese Karten werden groß aufgedeckt.
+export function zeremonie(pack, { artId = zufallsArt(), titel = null, auto = false, ausAuto = false, autoAblauf = false, fokus = null } = {}) {
+  return new Promise((resolve) => {
+    const z = new Zeremonie(pack, artId, titel, auto || autoAblauf, resolve, ausAuto);
+    z.autoAblauf = autoAblauf;
+    z.fokus = fokus;
+    z.start();
+  });
 }
 
 class Zeremonie {
@@ -212,7 +240,7 @@ class Zeremonie {
 
   bauen() {
     const o = h('div', { class: 'oeffnen', tabindex: '-1' });
-    o.innerHTML = `<div class="oe-hg"></div><div class="oe-strahlen"></div><div class="oe-glow"></div>
+    o.innerHTML = `<div class="oe-hg"></div><div class="oe-strahlen"></div><div class="oe-glow"></div><div class="oe-runen"></div>
 <div class="oe-titel">${this.titel ? esc(this.titel) : ''}</div>
 <div class="oe-buehne"><div class="oe-packplatz"></div><div class="oe-slot"></div><div class="oe-wurfplatz"></div></div>
 <div class="oe-faecher"></div>
@@ -227,11 +255,16 @@ class Zeremonie {
     this.hinweis = (t) => { this.q('.oe-hinweis').textContent = t || ''; };
     const tipp = (e) => {
       if (e.target.closest('button') || e.target.closest('.oe-uebersicht')) return;
-      this.tipp();
+      if (e.target.closest('.oe-slot')) this.tipp();
     };
     o.addEventListener('pointerdown', tipp);
     this.taste = (e) => {
-      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.tipp(); }
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        if (this.waehleR) this.waehleNaechste();
+        else if (this.weiterR) { const r = this.weiterR; this.weiterR = null; r(); }
+        else this.tipp();
+      }
       if (e.key === 'Escape') this.allesAufdecken();
     };
     document.addEventListener('keydown', this.taste);
@@ -250,22 +283,80 @@ class Zeremonie {
     this.leiste.replaceChildren(...liste.map((k) => h('button', { class: 'btn ' + (k.klasse || ''), html: k.text, onclick: k.aktion })));
   }
 
+  standardKnoepfe() {
+    if (this.autoAblauf) this.knoepfe([{ text: 'Auto-Öffnen anhalten', aktion: () => this.anhalten() }, { text: 'Überspringen', aktion: () => this.allesAufdecken() }]);
+    else this.knoepfe([{ text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+  }
+  // Im Auto-Ablauf: Wunsch merken, die Übersicht schließt sich dann nicht von selbst
+  anhalten() {
+    this.stoppWunsch = true;
+    this.knoepfe([{ text: 'Überspringen', aktion: () => this.allesAufdecken() }]);
+    this.hinweis('Auto-Öffnen wird nach diesem Pack angehalten');
+  }
+  autoWarten(ms) {
+    if (this.alles) return Promise.resolve();
+    return new Promise((r) => {
+      const t = setTimeout(() => { this.warter = null; r(); }, this.D(ms));
+      this.warter = () => { clearTimeout(t); r(); };
+    });
+  }
+  // Karte ohne Aufdeck-Animation in die Reihe legen (Auto-Ablauf, normale Karten)
+  inReiheSofort(i, n) {
+    const fk = this.faecherKarten[n];
+    if (fk) fk.style.visibility = 'hidden';
+    const mini = karteElement(this.pack.eintraege[i].karte, { animiert: false, interaktiv: false });
+    mini.classList.add('reihen-karte');
+    this.q('.oe-reihe').append(mini);
+  }
+
   async start() {
     this.bauen();
-    this.knoepfe([{ text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+    this.standardKnoepfe();
     await this.reissen();
+    // Beim manuellen Öffnen liegen die Karten gemischt im Fächer, man wählt selbst
+    if (!this.autoAblauf) this.reihenfolge = this.reihenfolge.map((i) => [i, Math.random()]).sort((a, b) => a[1] - b[1]).map(([i]) => i);
     await this.faechern();
     this.phase = 'aufdecken';
+    if (!this.autoAblauf) { await this.waehlen(); this.uebersicht(); return; }
     for (let n = 0; n < this.reihenfolge.length; n++) {
       if (this.alles) break;
       const i = this.reihenfolge[n];
+      if (this.autoAblauf && this.fokus && !this.fokus.has(i)) { this.inReiheSofort(i, n); continue; }
       this.eilig = false;
       await this.deckeAuf(i, n);
       if (this.alles) break;
-      await this.weiterWarten(n === this.reihenfolge.length - 1 ? 'Tippen für die Übersicht' : 'Tippen für die nächste Karte');
+      if (this.autoAblauf) await this.autoWarten(1700);
+      else await this.weiterWarten(n === this.reihenfolge.length - 1 ? 'Tippen für die Übersicht' : 'Tippen für die nächste Karte');
       await this.inReihe(i);
     }
     this.uebersicht();
+  }
+
+  // Manuell: Karte im Fächer anklicken, um sie aufzudecken
+  async waehlen() {
+    const offen = new Set(this.reihenfolge.map((_, n) => n));
+    let buehne = null;
+    this.waehleNaechste = () => { const n = [...offen][0]; if (n != null && this.waehleR) { const r = this.waehleR; this.waehleR = null; r(n); } };
+    while (offen.size && !this.alles) {
+      this.hinweis(buehne ? 'Wähle die nächste Karte im Fächer' : 'Wähle eine Karte im Fächer');
+      this.knoepfe([{ text: 'Nächste aufdecken', aktion: () => this.waehleNaechste() }, { text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+      this.o.classList.add('waehlbar');
+      const n = await new Promise((r) => { this.waehleR = r; });
+      this.o.classList.remove('waehlbar');
+      if (n == null || this.alles) break;
+      this.hinweis('');
+      if (buehne) await this.inReihe(buehne);
+      offen.delete(n);
+      const i = this.reihenfolge[n];
+      this.eilig = false;
+      await this.deckeAuf(i, n);
+      buehne = i;
+    }
+    if (this.alles) return;
+    this.hinweis('Alle Karten aufgedeckt');
+    this.knoepfe([{ text: 'Zur Übersicht', klasse: 'primaer', aktion: () => { if (this.weiterR) { const r = this.weiterR; this.weiterR = null; r(); } } }]);
+    await new Promise((r) => { this.weiterR = r; });
+    if (buehne != null && !this.alles) await this.inReihe(buehne);
   }
 
   allesAufdecken() {
@@ -273,18 +364,20 @@ class Zeremonie {
     this.alles = true; this.eilig = true;
     if (this.reissFertig) this.reissFertig();
     if (this.warter) { const w = this.warter; this.warter = null; w(); }
+    if (this.waehleR) { const r = this.waehleR; this.waehleR = null; r(null); }
+    if (this.weiterR) { const r = this.weiterR; this.weiterR = null; r(); }
   }
 
   // Phase 1: Aufreißen mit Widerstand [VORSCHLAG 13.4]
   reissen() {
     this.phase = 'reissen';
     const platz = this.q('.oe-packplatz');
-    const pack = packElement(this.artId);
+    const pack = packElement(this.artId, { gluecks: !!this.pack.gluecks, element: this.pack.sonder?.typ === 'element' ? this.pack.sonder.el : null });
     pack.classList.add('gross');
     platz.append(pack);
     anim(pack, [{ transform: 'translateY(60px) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,.9,.3,1.2)' });
     this.hinweis('Ziehe an der Lasche, um das Pack aufzureißen');
-    this.knoepfe([{ text: 'Aufreißen', klasse: 'primaer', aktion: () => auto() }, { text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+    if (!this.autoAblauf) this.knoepfe([{ text: 'Aufreißen', klasse: 'primaer', aktion: () => auto() }, { text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
     // Widerstand: Die Folie folgt dem Finger nur mit begrenzter Geschwindigkeit, am Anfang zäh, dann reißt sie schneller.
     let p = 0, ziel = 0, ziehen = false, startX = 0, letzterKnister = 0, fertig = false, tLetzt = 0;
     const zeichneP = () => {
@@ -343,7 +436,7 @@ class Zeremonie {
     pack.addEventListener('pointerup', up);
     pack.addEventListener('pointercancel', up);
     const auto = () => {
-      this.knoepfe([{ text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+      this.standardKnoepfe();
       ziel = 1;
     };
     if (this.auto) auto();
@@ -358,7 +451,12 @@ class Zeremonie {
     const n = this.reihenfolge.length;
     this.faecherKarten = this.reihenfolge.map((i, k) => {
       const winkel = (k - (n - 1) / 2) * 7;
-      const el = h('div', { class: 'faecher-karte', style: `--w:${winkel}deg;--k:${k}`, html: `<div class="fk-innen"></div>` });
+      const e = this.pack.eintraege[i];
+      // Sehr Seltenes glüht schon in der Vorschau [Nutzer, 21.11.2026]
+      const glut = e.stufe >= 7 || e.karte.kl >= 7 || e.karte.fx.length ? 3 : e.stufe >= 5 || e.karte.kl >= 6 ? 2 : e.stufe >= 4 || e.karte.kl >= 5 ? 1 : 0;
+      const farbeGlut = e.stufe >= 4 ? stufenFarbe(e.stufe) : KLASSEN_FARBEN[e.karte.kl];
+      const el = h('div', { class: 'faecher-karte' + (glut ? ' glut' + glut : ''), style: `--w:${winkel}deg;--k:${k};--fg:${farbeGlut}`, html: `<div class="fk-innen"></div>` });
+      el.addEventListener('click', () => { if (this.waehleR) { Sound.schnipp(); const r = this.waehleR; this.waehleR = null; r(k); } });
       f.append(el);
       return el;
     });
@@ -367,7 +465,7 @@ class Zeremonie {
       anim(el, [{ transform: 'translate(-50%, 40vh) rotate(0deg) scale(.6)', opacity: 0 }, { transform: `translate(calc(-50% + ${(k - (n - 1) / 2) * 36}px), ${Math.abs(k - (n - 1) / 2) * 5}px) rotate(var(--w))`, opacity: 1 }], { duration: this.D(520), delay: this.D(k * 45), easing: 'cubic-bezier(.2,.9,.3,1.15)' });
     }
     await this.warteD(520 + n * 45);
-    this.knoepfe([{ text: 'Alle aufdecken', aktion: () => this.allesAufdecken() }]);
+    if (!this.stoppWunsch) this.standardKnoepfe();
   }
 
   // Phase 3: einzeln aufdecken
@@ -422,13 +520,54 @@ class Zeremonie {
       else Sound.einrasten(false);
     });
     await Promise.all(laeufe);
+    if (c.fx.length && !this.alles) await this.effektShow(karte, c);
     // Feier je nach Stufe
-    this.o.classList.add(st >= 7 ? 'grossfeier' : st >= 3 ? 'feier' : 'ruhig');
+    // Je seltener, desto mehr Feuerwerk [Nutzer, 21.11.2026: "way more dopamin"]
+    const hohKlasse = c.kl >= 5;
+    const rekord = st >= 3 && st > (this.pack.besteVorher || 1);
+    const klasseRekord = c.kl >= 4 && c.kl > (this.pack.besteKlasseVorher ?? -1);
+    const wucht = Math.max(st >= 3 ? st : 0, hohKlasse ? c.kl + 1 : 0, c.holo !== 'keins' ? 4 : 0);
+    this.o.classList.add(st >= 7 || c.kl >= 6 ? 'grossfeier' : wucht >= 3 ? 'feier' : 'ruhig');
     Sound.stufe(st);
     const r = karte.getBoundingClientRect();
-    if (st >= 2) partikel(r.left + r.width / 2, r.top + r.height / 2, { anzahl: 10 + st * 8, farben: [stufenFarbe(st), '#fff', '#ffd447'], weite: 120 + st * 30 });
-    if (st >= 5) { schuetteln(this.o, 0.6 + st * 0.12); blitzLicht(stufenFarbe(st), 0.35 + st * 0.03); }
-    if (st >= 3) this.banner(st, c);
+    const mx = r.left + r.width / 2, my = r.top + r.height / 2;
+    if (st >= 2 || hohKlasse) partikel(mx, my, { anzahl: 14 + wucht * 12, farben: [stufenFarbe(st), '#fff', '#ffd447'], weite: 140 + wucht * 40 });
+    if (wucht >= 4) {
+      Sound.jackpot(wucht);
+      konfetti(40 + wucht * 18, [stufenFarbe(st), '#ffd447', '#fff', '#ff5fd2', '#5ffff0']);
+      for (let i = 1; i <= Math.min(4, wucht - 3); i++) setTimeout(() => partikel(mx + (Math.random() - 0.5) * 300, my + (Math.random() - 0.5) * 200, { anzahl: 30, farben: [stufenFarbe(st), '#fff'], weite: 180 }), this.D(260 * i));
+    }
+    if (wucht >= 5) { schuetteln(this.o, 0.6 + wucht * 0.14); blitzLicht(stufenFarbe(st), 0.35 + wucht * 0.04); }
+    if (wucht >= 7) setTimeout(() => { konfetti(160, ['#ffd447', '#fff6c8', '#ff9b2f', '#fff']); blitzLicht('#fff', 0.5); Sound.jackpot(wucht + 2); }, this.D(900));
+    if (!c.fx.length && (st >= 3 || hohKlasse)) this.banner(st, c, { rekord, klasseRekord });
+    else if (rekord || klasseRekord) this.rekordSticker(rekord ? 'Neuer Rekord!' : `Erste ${KLASSEN[c.kl].name}-Karte!`);
+  }
+
+  rekordSticker(text) {
+    const st = h('div', { class: 'rekord-sticker', text });
+    this.o.append(st);
+    Sound.muenze();
+    setTimeout(() => st.remove(), 3200);
+  }
+
+  // Spezialeffekt: eigene, epische Inszenierung [Nutzer, 21.11.2026]
+  async effektShow(karte, c) {
+    const o = this.o;
+    o.classList.add('fx-show');
+    karte.classList.add('fx-buehne');
+    Sound.effekt();
+    Sound.chor(392, 9 + c.fx.length * 2);
+    blitzLicht('#ffd447', 0.55);
+    schuetteln(o, 1.2);
+    const r = karte.getBoundingClientRect();
+    partikel(r.left + r.width / 2, r.top + r.height / 2, { anzahl: 90, farben: ['#ffd447', '#fff', '#ff9b2f', '#ff5fd2'], weite: 420, dauer: 1600, groesse: 9 });
+    const b = this.q('.oe-banner');
+    b.style.setProperty('--bf', '#ffd447');
+    b.innerHTML = `<span>✦ Spezialeffekt${c.fx.length > 1 ? 'e' : ''} ✦</span>${c.fx.map((id, i) => `<small class="fx-zeile" style="animation-delay:${(0.35 + i * 0.5).toFixed(2)}s">${esc(EFFEKT[id].name)} · ${esc(EFFEKT[id].wirkung)}</small>`).join('')}`;
+    b.classList.remove('an', 'lang'); void b.offsetWidth; b.classList.add('an', 'lang');
+    for (let i = 0; i < c.fx.length; i++) setTimeout(() => { Sound.stufe(10 + i); blitzLicht('#fff3b0', 0.3); }, this.D(350 + i * 500));
+    await this.warteD(1600 + c.fx.length * 600);
+    o.classList.remove('fx-show');
   }
 
   nachbild(karte) {
@@ -441,11 +580,16 @@ class Zeremonie {
     }
   }
 
-  banner(st, c) {
+  banner(st, c, { rekord = false, klasseRekord = false } = {}) {
     const b = this.q('.oe-banner');
-    b.style.setProperty('--bf', stufenFarbe(st));
-    b.innerHTML = `<span>${esc(stufenName(st))}</span>${c.fx.length ? `<small>${c.fx.map((id) => esc(EFFEKT[id].name)).join(' · ')}</small>` : ''}`;
-    b.classList.remove('an'); void b.offsetWidth; b.classList.add('an');
+    const ch = seltenheitsChancen();
+    const nurKlasse = st < 3;
+    b.style.setProperty('--bf', nurKlasse ? KLASSEN_FARBEN[c.kl] : stufenFarbe(st));
+    const titel = nurKlasse ? `${KLASSEN[c.kl].name}!` : stufenName(st);
+    const quote = nurKlasse ? einsVon(KLASSEN[c.kl].chance) : einsVon(ch[st]);
+    b.innerHTML = `<span>${esc(titel)}</span><small class="quote">${esc(quote)} Karten</small>${rekord ? '<small class="rekord">★ Neuer Rekord ★</small>' : klasseRekord ? `<small class="rekord">★ Erste ${esc(KLASSEN[c.kl].name)}-Karte ★</small>` : ''}`;
+    b.classList.remove('an', 'lang'); void b.offsetWidth; b.classList.add('an');
+    if (st >= 6 || rekord) b.classList.add('lang');
   }
 
   async inReihe(i) {
@@ -487,12 +631,13 @@ class Zeremonie {
     const karten = h('div', { class: 'ue-karten' });
     this.reihenfolge.forEach((i, k) => {
       const e = this.pack.eintraege[i];
-      const el = karteElement(e.karte, { rueckseite: 'info', drehbar: true, maxNeigung: 12 });
+      const el = karteElement(e.karte, { maxNeigung: 12 });
       if (e.neuArt || e.neuAusf) el.append(h('div', { class: 'neu-marke', text: e.neuArt ? 'NEU' : 'NEUE AUSF.' }));
+      el.addEventListener('click', () => { abbruch(); karteVergroessern(e.karte, { neu: e.neuArt ? 'NEU' : e.neuAusf ? 'NEUE AUSFÜHRUNG' : null }); });
       karten.append(el);
       anim(el, [{ opacity: 0, transform: 'translateY(30px) scale(.9)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: k * 50, easing: 'cubic-bezier(.2,.9,.3,1.1)' });
     });
-    grid.append(kopf, karten, h('p', { class: 'ue-tipp', text: 'Tippe eine Karte an, um sie umzudrehen. Die Rückseite zeigt Werte und Chancen.' }));
+    grid.append(kopf, karten, h('p', { class: 'ue-tipp', text: 'Tippe eine Karte an, um sie groß mit allen Werten und Chancen zu sehen.' }));
     o.append(grid);
     const zu = (weiter) => {
       document.removeEventListener('keydown', this.taste);
@@ -501,10 +646,24 @@ class Zeremonie {
       this.fertig(weiter);
     };
     const knoepfe = [{ text: 'Fertig', aktion: () => zu(false) }];
+    // Auto-Ablauf: Übersicht kurz zeigen, dann von selbst weiter (außer der Spieler hält an oder schaut sich eine Karte an)
+    let autoTimer = null;
+    const abbruch = () => { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; this.hinweis(''); this.knoepfe(knoepfe); } };
+    if (this.autoAblauf && !this.stoppWunsch) {
+      let rest = 3;
+      this.hinweis(`Auto-Öffnen geht in ${rest} s weiter`);
+      autoTimer = setInterval(() => {
+        if (--rest > 0) { this.hinweis(`Auto-Öffnen geht in ${rest} s weiter`); return; }
+        clearInterval(autoTimer); autoTimer = null;
+        if (document.querySelector('.lupe-hg')) { this.hinweis(''); return; }
+        zu('weiter');
+      }, 1000);
+      this.knoepfe([{ text: 'Auto-Öffnen anhalten', aktion: () => { abbruch(); zu(false); } }, { text: 'Weiter', klasse: 'primaer', aktion: () => { abbruch(); zu('weiter'); } }]);
+    }
     if (this.ausAuto) knoepfe.unshift({ text: 'Auto-Öffnen fortsetzen', klasse: 'primaer', aktion: () => zu('weiter') });
     else if (S.d.packs > 0) knoepfe.unshift({ text: `Nächstes Pack (${fmt(S.d.packs)})`, klasse: 'primaer', aktion: async () => { zu(false); await warte(320); naechstesPack(); } });
-    this.knoepfe(knoepfe);
-    this.taste = (e) => { if (e.key === 'Escape' || e.key === 'Enter') zu(false); };
+    if (!autoTimer) this.knoepfe(knoepfe);
+    this.taste = (e) => { if (document.querySelector('.lupe-hg')) return; if (e.key === 'Escape') { abbruch(); zu(false); } if (e.key === 'Enter') { abbruch(); zu(this.autoAblauf ? 'weiter' : false); } };
     document.addEventListener('keydown', this.taste);
   }
 }

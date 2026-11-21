@@ -26,14 +26,14 @@ export function neueEinheit(c, seite, rng) {
   return u;
 }
 
-function neueSeite(id, name, karten, leben, rng) {
-  return { id, name, leben, maxLeben: leben, bank: 0, hand: karten.map((c) => neueEinheit(c, id, rng)), feld: [], friedhof: [], lebenZug: -1, ankerGenutzt: false, angriffe: 0 };
+function neueSeite(id, name, karten, leben, rng, einkommen = CONFIG.kampf.beschwoerungProZug, startBank = 0) {
+  return { id, name, leben, maxLeben: leben, bank: startBank, basisEinkommen: einkommen, hand: karten.map((c) => neueEinheit(c, id, rng)), feld: [], friedhof: [], lebenZug: -1, ankerGenutzt: false, angriffe: 0 };
 }
 
-export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false }) {
+export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false, gegnerEinkommen, gegnerStartBank = 0 }) {
   return {
     zug: 0, rng, autoSpieler,
-    seiten: [neueSeite(0, spielerName, spielerKarten, spielerLeben, rng), neueSeite(1, gegnerName, gegnerKarten, gegnerLeben, rng)],
+    seiten: [neueSeite(0, spielerName, spielerKarten, spielerLeben, rng), neueSeite(1, gegnerName, gegnerKarten, gegnerLeben, rng, gegnerEinkommen, gegnerStartBank)],
     ende: null, ev: [], log: [],
   };
 }
@@ -125,7 +125,7 @@ export function effektiveKosten(b, s, u) {
 export function einkommen(b, s) {
   let f = 1;
   for (const q of quellen(b, s)) { if (aktiv(b, q, 'verstaerker')) f *= 3; if (aktiv(b, q, 'doppelrufer')) f *= 2; }
-  return CONFIG.kampf.beschwoerungProZug * f;
+  return (b.seiten[s].basisEinkommen ?? CONFIG.kampf.beschwoerungProZug) * f;
 }
 
 // ---------- Leben ----------
@@ -152,6 +152,13 @@ function stirb(b, u, killer) {
     u.schaden = maxLeben(b, u) - 1;
     emit(b, { t: 'atem', seite: u.seite, uid: u.uid });
     log(b, `${u.name} kommt mit Zweitem Atem zurück.`);
+    return false;
+  }
+  if (aktiv(b, u, 'auferstehung') && !u.auferstanden) {
+    u.auferstanden = true;
+    u.schaden = 0;
+    emit(b, { t: 'atem', seite: u.seite, uid: u.uid, text: 'Auferstehung!' });
+    log(b, `${u.name} steht wieder auf, mit vollen Lebenspunkten!`);
     return false;
   }
   u.tot = true; u.todZug = b.zug;
@@ -378,36 +385,21 @@ function geplantesZiel(b, u, D, spalte, w, bereits, geplant) {
   return { lebende, gegenueber, kand, koeder };
 }
 
-function planeSeite(b, s, geplant) {
-  const A = b.seiten[s], D = gegner(b, s);
-  const treffer = [];
-  let versuche = 0;
-  A.feld.forEach((u, spalte) => {
-    if (!u || u.tot) return;
-    const w = werte(b, u);
-    const bereits = new Set();
-    for (let k = 0; k < w.schlag; k++) {
-      versuche++;
-      const { lebende, gegenueber, kand, koeder } = geplantesZiel(b, u, D, spalte, w, bereits, geplant);
-      if (!lebende.length) { treffer.push({ typ: 'leer', u, spalte }); continue; }
-      if (aktiv(b, u, 'wahllos')) {
-        const pool = lebende.filter((t) => !bereits.has(t.uid));
-        const t = (pool.length ? pool : lebende)[Math.floor(b.rng.next() * (pool.length || lebende.length))];
-        bereits.add(t.uid);
-        treffer.push({ typ: 'wahllos', u, teile: [{ t, punkte: w.kraft }], wahllos: true });
-        continue;
-      }
-      if (!kand.length) {
-        if (!gegenueber) treffer.push({ typ: 'leere', u, punkte: w.kraft }); // Verteidiger wählt [FEST 12.4]
-        else treffer.push({ typ: 'kein', u });
-        continue;
-      }
-      const teile = verteile(b, u, w, kand, koeder, geplant);
-      for (const tl of teile) bereits.add(tl.t.uid);
-      treffer.push({ typ: w.wild >= 1 ? 'frei' : 'direkt', u, teile });
-    }
-  });
-  return { treffer, versuche };
+// Ein einzelner Angriff eines Monsters: Ziel und Aufteilung nach dem aktuellen Stand des Feldes
+function planeAngriff(b, u, spalte, w, bereits) {
+  const D = gegner(b, u.seite);
+  const { lebende, gegenueber, kand, koeder } = geplantesZiel(b, u, D, spalte, w, bereits);
+  if (!lebende.length) return { typ: 'leer' };
+  if (aktiv(b, u, 'wahllos')) {
+    const pool = lebende.filter((t) => !bereits.has(t.uid));
+    const t = (pool.length ? pool : lebende)[Math.floor(b.rng.next() * (pool.length || lebende.length))];
+    bereits.add(t.uid);
+    return { typ: 'wahllos', teile: [{ t, punkte: w.kraft }], wahllos: true };
+  }
+  if (!kand.length) return gegenueber ? { typ: 'kein' } : { typ: 'leere', punkte: w.kraft }; // Verteidiger wählt [FEST 12.4]
+  const teile = verteile(b, u, w, kand, koeder, new Map());
+  for (const tl of teile) bereits.add(tl.t.uid);
+  return { typ: w.wild >= 1 ? 'frei' : 'direkt', teile };
 }
 
 // Gierige Aufteilung der Kraftpunkte [FEST 12.4] in ganzen Punkten, jeder Teil ≥ 1 [ANNAHME]
@@ -456,6 +448,34 @@ function verteidigerWahl(b, u, D, punkte, w) {
 }
 
 // ---------- Kampfphase ----------
+// [Nutzer, 21.11.2026] Wer 0 Leben hat, stirbt sofort und greift nicht mehr an (statt gleichzeitiger Abrechnung).
+// Reihenfolge: Spalte für Spalte, die Seiten wechseln sich ab. Wer zuerst zuschlägt, wechselt jeden Zug.
+function pruefeTod(b, einheit, killer) {
+  if (!einheit.tot && restLeben(b, einheit) <= 1e-9) stirb(b, einheit, killer && !killer.tot ? killer : null);
+}
+
+function treffe(b, u, z, punkte, wahllos, w, typ) {
+  const s = u.seite;
+  u.enthuellt = true;
+  const { schaden, f, art } = schadenFuer(b, u, z, punkte, wahllos, w);
+  if (aktiv(b, z, 'spiegel') && z.spiegelZug !== b.zug && schaden > 0) {
+    z.spiegelZug = b.zug;
+    u.schaden += schaden;
+    emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, gespiegelt: true, hpNach: restLeben(b, z), hpAngreifer: restLeben(b, u) });
+    pruefeTod(b, u, z);
+    return;
+  }
+  z.schaden += schaden;
+  emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, hpNach: restLeben(b, z) });
+  if (aktiv(b, z, 'dornen')) { u.schaden += 1; emit(b, { t: 'dornen', seite: 1 - s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }
+  if (aktiv(b, u, 'flaechenwirbel')) {
+    const D = gegner(b, s), sp = D.feld.indexOf(z);
+    for (const n of [D.feld[sp - 1], D.feld[sp + 1]]) if (n && !n.tot) { n.schaden += schaden / 2; emit(b, { t: 'flaeche', seite: s, von: u.uid, ziel: n.uid, schaden: schaden / 2, hpNach: restLeben(b, n) }); pruefeTod(b, n, u); }
+  }
+  pruefeTod(b, z, u);
+  pruefeTod(b, u, z);
+}
+
 export function kampf(b) {
   if (b.ende) return;
   const vorher = [0, 1].map((s) => lebend(b.seiten[s]).length);
@@ -464,54 +484,44 @@ export function kampf(b) {
     const neu = waehleVerschiebung(b, u);
     if (neu !== u.elZug) { emit(b, { t: 'verschieben', seite: s, uid: u.uid, von: u.elZug, nach: neu }); u.elZug = neu; }
   }
-  // 4. Gleichzeitig planen
-  const plaene = [0, 1].map((s) => planeSeite(b, s, new Map()));
-  // dann anwenden
-  const angewendet = [];
-  for (const s of [0, 1]) {
-    const D = gegner(b, s);
-    for (const tr of plaene[s].treffer) {
-      const u = tr.u;
-      if (tr.typ === 'leer') { angewendet.push({ s, typ: 'leer', u }); continue; }
-      if (tr.typ === 'kein') { angewendet.push({ s, typ: 'kein', u }); continue; }
-      const w = werte(b, u);
+  // Heilung [Nutzer]: jedes Monster verteilt seine Heilpunkte auf die am stärksten verletzten Verbündeten
+  for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) {
+    let rest = u.a.heilung || 0;
+    while (rest > 0) {
+      const z = lebend(b.seiten[s]).filter((q) => q.schaden > 0.01).sort((x, y) => y.schaden - x.schaden)[0];
+      if (!z) break;
+      const menge = Math.min(rest, z.schaden, Math.max(1, Math.ceil(rest / 2)));
+      z.schaden -= menge; rest -= menge;
+      emit(b, { t: 'heilung', seite: s, uid: z.uid, wert: menge, quelle: u.uid });
+    }
+  }
+  // 4. Angriffe der Reihe nach, Schaden wirkt sofort
+  const versuche = [0, 0];
+  const erste = b.zug % 2 === 1 ? 0 : 1;
+  const reihenfolge = [];
+  const breite = Math.max(b.seiten[0].feld.length, b.seiten[1].feld.length);
+  for (let sp = 0; sp < breite; sp++) for (const s of [erste, 1 - erste]) { const u = b.seiten[s].feld[sp]; if (u && !u.tot) reihenfolge.push(u); }
+  for (const u of reihenfolge) {
+    if (u.tot || b.ende) continue;
+    const s = u.seite, D = gegner(b, s);
+    const w = werte(b, u);
+    const bereits = new Set();
+    for (let k = 0; k < w.schlag && !u.tot; k++) {
+      versuche[s]++;
+      const tr = planeAngriff(b, u, b.seiten[s].feld.indexOf(u), w, bereits);
+      if (tr.typ === 'leer') { emit(b, { t: 'angriff', seite: s, von: u.uid, leer: true }); continue; }
+      if (tr.typ === 'kein') { emit(b, { t: 'angriff', seite: s, von: u.uid, kein: true }); continue; }
       let teile = tr.teile;
-      if (tr.typ === 'leere') {
-        const t = verteidigerWahl(b, u, D, tr.punkte, w);
-        teile = t ? [{ t, punkte: tr.punkte }] : [];
-      }
-      for (const tl of teile) angewendet.push({ s, typ: tr.typ, u, t: tl.t, punkte: tl.punkte, wahllos: !!tr.wahllos, w });
+      if (tr.typ === 'leere') { const t = verteidigerWahl(b, u, D, tr.punkte, w); teile = t ? [{ t, punkte: tr.punkte }] : []; }
+      for (const tl of teile) { if (u.tot) break; if (!tl.t.tot) treffe(b, u, tl.t, tl.punkte, !!tr.wahllos, w, tr.typ); }
     }
   }
-  for (const h of angewendet) {
-    const u = h.u;
-    if (h.typ === 'leer') { emit(b, { t: 'angriff', seite: h.s, von: u.uid, leer: true }); continue; }
-    if (h.typ === 'kein') { emit(b, { t: 'angriff', seite: h.s, von: u.uid, kein: true }); continue; }
-    u.enthuellt = true;
-    const z = h.t;
-    const { schaden, f, art } = schadenFuer(b, u, z, h.punkte, h.wahllos, h.w);
-    if (aktiv(b, z, 'spiegel') && z.spiegelZug !== b.zug && schaden > 0) {
-      z.spiegelZug = b.zug;
-      u.schaden += schaden;
-      emit(b, { t: 'angriff', seite: h.s, von: u.uid, ziel: z.uid, schaden, f, art, punkte: h.punkte, typ: h.typ, gespiegelt: true, hpNach: restLeben(b, z), hpAngreifer: restLeben(b, u) });
-      continue;
-    }
-    z.schaden += schaden;
-    emit(b, { t: 'angriff', seite: h.s, von: u.uid, ziel: z.uid, schaden, f, art, punkte: h.punkte, typ: h.typ, hpNach: restLeben(b, z) });
-    if (aktiv(b, z, 'dornen')) { u.schaden += 1; emit(b, { t: 'dornen', seite: 1 - h.s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }
-    if (aktiv(b, u, 'flaechenwirbel')) {
-      const D = gegner(b, h.s), sp = D.feld.indexOf(z);
-      for (const n of [D.feld[sp - 1], D.feld[sp + 1]]) if (n && !n.tot) { n.schaden += schaden / 2; emit(b, { t: 'flaeche', seite: h.s, von: u.uid, ziel: n.uid, schaden: schaden / 2, hpNach: restLeben(b, n) }); }
-    }
-  }
-  // 5. Aufräumen: Tod, Leben
-  const toetung = new Map();
-  for (const h of angewendet) if (h.t) toetung.set(h.t.uid, h.u);
-  for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) if (restLeben(b, u) <= 1e-9) stirb(b, u, toetung.get(u.uid));
+  // 5. Aufräumen: Leben
+  for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) pruefeTod(b, u, null);
   for (const s of [0, 1]) {
     const jetzt = lebend(b.seiten[s]).length;
     if (vorher[s] > 0 && jetzt === 0) verliereLeben(b, s, 'alle Monster ausgeschaltet'); // [FEST 12.5]
-    else if (vorher[s] === 0 && plaene[1 - s].versuche > 0) verliereLeben(b, s, 'Angriff ohne eigene Monster'); // [FEST 12.5]
+    else if (vorher[s] === 0 && versuche[1 - s] > 0) verliereLeben(b, s, 'Angriff ohne eigene Monster'); // [FEST 12.5]
   }
   for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) u.buff = u.buff.filter((bf) => bf.bis > b.zug);
   pruefeEnde(b);
@@ -536,6 +546,9 @@ function pruefeEnde(b) {
   else if (g.leben <= 0) { sieger = 0; grund = `${g.name} hat keine Leben mehr`; }
   else if (p.leben <= 0) { sieger = 1; grund = `${p.name} hat keine Leben mehr`; }
   else if (leer(p) && leer(g)) { sieger = p.leben > g.leben ? 0 : p.leben < g.leben ? 1 : -1; grund = 'keine Monster mehr übrig'; }
+  // [Nutzer, 21.11.2026] Hat eine Seite keine Karten mehr (weder Feld noch Hand), ist der Kampf sofort entschieden.
+  else if (leer(g)) { sieger = 0; grund = `${g.name} hat keine Karten mehr`; }
+  else if (leer(p)) { sieger = 1; grund = `${p.name} hat keine Karten mehr`; }
   else if (b.zug >= CONFIG.kampf.rundenLimit) {
     const a = gesamtStaerke(b, 0), c = gesamtStaerke(b, 1);
     sieger = p.leben !== g.leben ? (p.leben > g.leben ? 0 : 1) : a > c ? 0 : a < c ? 1 : -1;

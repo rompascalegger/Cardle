@@ -801,3 +801,10 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .gal-silh figure { margin: 0; background: #e9e6f2; border-radius: 8px; padding: 4px; text-align: center; }
 .gal-silh img { width: 100%; filter: brightness(0); }
 .gal-silh figcaption { font-size: 10px; color: #333; }
+
+/* Hilfe: Spielstand sichern */
+.sicherung { margin-bottom: 12px; }
+.sicherung-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.sicherung-text { width: 100%; box-sizing: border-box; font: 11px/1.3 ui-monospace, monospace; background: rgba(0,0,0,.25); color: inherit; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px; resize: vertical; }
+.sicherung-info { min-height: 1.2em; margin: 6px 0 0; font-size: 13px; color: #8ff0b0; }
+.sicherung-info.fehler { color: #ff8a8a; }

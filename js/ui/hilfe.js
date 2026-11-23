@@ -8,6 +8,7 @@ import { prozent, seltenheitsChancen, einsVon, pHolo } from '../rules.js';
 import { esc } from '../cardview.js';
 import { faktorText } from '../elements.js';
 import { h, modal, fmt } from './dom.js';
+import { spielstandExport, spielstandPruefen, spielstandImport, speichern } from '../state.js';
 
 const abschnitt = (titel, html, offen = false) => `<details class="hilfe-abschnitt"${offen ? ' open' : ''}><summary>${titel}</summary><div class="hilfe-text">${html}</div></details>`;
 
@@ -73,5 +74,52 @@ export function hilfe() {
 <li>Elementarschutz teilt jeden Treffer, schon 1 Punkt halbiert den Schaden.</li>
 <li>Verkaufe schwache Doppelte, um Münzen für das Auto-Öffnen zu bekommen.</li></ul>`),
   ].join('');
-  modal({ titel: 'Hilfe', inhalt: h('div', { class: 'hilfe', html }), klasse: 'breit' });
+  const inhalt = h('div', { class: 'hilfe' }, sicherung(), h('div', { html }));
+  modal({ titel: 'Hilfe', inhalt, klasse: 'breit' });
+}
+
+// Spielstand exportieren und importieren (Datei oder Text zum Kopieren)
+function sicherung() {
+  const info = h('p', { class: 'sicherung-info' });
+  const feld = h('textarea', { class: 'sicherung-text', rows: 3, spellcheck: false, placeholder: 'Spielstand hier einfügen …' });
+  const melde = (t, fehler = false) => { info.textContent = t; info.classList.toggle('fehler', fehler); };
+  const datei = h('input', { type: 'file', accept: '.json,application/json,text/plain', hidden: true, onchange: async () => { const f = datei.files[0]; if (f) { feld.value = await f.text(); importieren(); } datei.value = ''; } });
+
+  const exportieren = async () => {
+    await speichern();
+    const text = spielstandExport();
+    const tag = new Date().toISOString().slice(0, 10);
+    const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: `cardle-spielstand-${tag}.json` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    melde('Spielstand als Datei gespeichert.');
+  };
+  const kopieren = async () => {
+    await speichern();
+    const text = spielstandExport();
+    feld.value = text;
+    try { await navigator.clipboard.writeText(text); melde('Spielstand in die Zwischenablage kopiert.'); } catch { feld.select(); melde('Text unten markiert: mit Strg+C kopieren.'); }
+  };
+  const importieren = () => {
+    let p;
+    try { p = spielstandPruefen(feld.value); } catch (e) { return melde(e.message, true); }
+    const wann = p.zeit ? ` vom ${new Date(p.zeit).toLocaleString('de-DE')}` : '';
+    modal({
+      titel: 'Spielstand importieren?',
+      inhalt: `<p>Spielstand${wann}: <b>${fmt(p.karten)}</b> Karten, <b>${fmt(p.muenzen)}</b> Münzen, <b>${fmt(p.packs)}</b> Packs.</p><p>Dein aktueller Spielstand wird dabei <b>ersetzt</b>. Exportiere ihn vorher, wenn du ihn behalten willst.</p>`,
+      knoepfe: [
+        { text: 'Abbrechen' },
+        { text: 'Ersetzen und laden', klasse: 'primaer', aktion: () => { spielstandImport(feld.value).catch((e) => melde(e.message, true)); } },
+      ],
+    });
+  };
+  return h('div', { class: 'panel sicherung' },
+    h('h3', { text: 'Spielstand sichern' }),
+    h('p', { text: 'Exportiere deinen Spielstand als Datei oder Text, um ihn zu sichern oder auf ein anderes Gerät mitzunehmen.' }),
+    h('div', { class: 'sicherung-knoepfe' },
+      h('button', { class: 'btn primaer', text: 'Exportieren (Datei)', onclick: exportieren }),
+      h('button', { class: 'btn', text: 'Als Text kopieren', onclick: kopieren }),
+      h('button', { class: 'btn', text: 'Datei importieren', onclick: () => datei.click() }),
+      h('button', { class: 'btn', text: 'Text importieren', onclick: importieren })),
+    feld, datei, info);
 }

@@ -166,6 +166,7 @@ function migriereArten(alt) {
 
 let speicherTimer = null;
 export async function speichern() {
+  if (S.gesperrt) return; // nach einem Import: der importierte Stand darf nicht überschrieben werden
   S.d.karten = S.karten.join(';');
   S.d.rng = S.rng.getState();
   const roh = JSON.stringify(S.d);
@@ -185,6 +186,32 @@ export function speichernSpaetestens(ms = 3000) {
   S.dirty = true;
   if (drosselTimer) return;
   drosselTimer = setTimeout(() => { drosselTimer = null; speichern(); }, ms);
+}
+// ---------- Export / Import ----------
+// Spielstand als Text (JSON). Enthält alles: Karten, Münzen, Packs, Kampagne, Erfolge, Zufallszustand.
+export function spielstandExport() {
+  const d = Object.assign({}, S.d, { karten: S.karten.join(';'), rng: S.rng.getState() });
+  return JSON.stringify({ spiel: 'cardle', format: 1, zeit: new Date().toISOString(), stand: d });
+}
+// Prüft den Text und gibt eine kurze Übersicht zurück, ohne etwas zu ändern
+export function spielstandPruefen(text) {
+  let o;
+  try { o = JSON.parse(String(text).trim()); } catch { throw new Error('Das ist kein gültiger Cardle-Spielstand (kein JSON).'); }
+  const d = o && o.spiel === 'cardle' ? o.stand : o;
+  if (!d || typeof d !== 'object' || typeof d.seed !== 'string' || typeof d.muenzen !== 'number') throw new Error('Das ist kein gültiger Cardle-Spielstand.');
+  if (d.karten != null && typeof d.karten !== 'string') throw new Error('Die Kartenliste im Spielstand ist beschädigt.');
+  const karten = d.karten ? d.karten.split(';') : [];
+  for (const c of karten) if (!/^[0-9a-z]+$/.test(c)) throw new Error('Die Kartenliste im Spielstand ist beschädigt.');
+  return { d, karten: karten.length, muenzen: d.muenzen, packs: d.packs || 0, zeit: o.zeit || null };
+}
+// Schreibt den Stand in den Speicher und lädt die Seite neu (dabei laufen alle Migrationen)
+export async function spielstandImport(text) {
+  const { d } = spielstandPruefen(text);
+  S.gesperrt = true;
+  const roh = JSON.stringify(d);
+  const ok = await IDB.set(SLOT, roh);
+  if (!ok) { try { localStorage.setItem(SLOT, roh); } catch { S.gesperrt = false; throw new Error('Speichern fehlgeschlagen.'); } }
+  location.reload();
 }
 export async function zuruecksetzen() {
   S.d = neuerStand();

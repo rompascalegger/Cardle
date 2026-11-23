@@ -247,19 +247,44 @@ function spaltenWert(b, s, u, sp) {
   const ein = Math.log(faktorInfo(sichtbaresEl(opp), u.el).f);
   return 1 + aus - ein + (wo.wild === 0 && wo.schlag > 0 ? 0.6 : 0);
 }
+// Höchster Schaden, den eine Karte in einer Runde abbekommen kann: jeder Angreifer trifft ein Ziel höchstens einmal je Runde
+function bedrohung(feindWerte, u) {
+  let summe = 0;
+  for (const { f, w } of feindWerte) summe += w.kraft * w.mult * faktorInfo(sichtbaresEl(f), u.el).f;
+  return summe / ((u.a.schutz || 0) + 1);
+}
+
+// KI für das Beschwören (Gegner und "Auto"). Aus der Balance-Simulation: Karten, die die nächste Runde nicht
+// überleben, kosten nur Punkte (und trotzdem ein Leben). Also nur Überlebende spielen, sonst sparen.
+// Hat der Gegner kein Monster, ist jeder eigene Angreifer ein Leben wert.
 export function kiBeschwoeren(b, s) {
   const seite = b.seiten[s];
   for (let n = 0; n < 40 && !b.ende; n++) {
     const kandidaten = seite.hand.map((u, i) => ({ u, i, k: effektiveKosten(b, s, u) }));
     const leistbar = kandidaten.filter((x) => x.k <= seite.bank);
     if (!leistbar.length) break;
-    const teuerste = kandidaten.reduce((m, x) => Math.max(m, x.k), 0);
-    const feldN = lebend(seite).length;
+    const feinde = lebend(gegner(b, s));
+    const feindWerte = feinde.map((f) => ({ f, w: werte(b, f) })).filter((x) => x.w.kraft > 0 && x.w.schlag > 0);
+    const eigeneAngreifer = lebend(seite).some((u) => { const w = werte(b, u); return w.kraft > 0 && w.schlag > 0; });
+    const ueberlebt = (x) => staerke(x.u.a) > bedrohung(feindWerte, x.u) * 0.95;
+    const greiftAn = (x) => x.u.a.kraft > 0 && x.u.a.schlagzahl > 0;
     const wert = (x) => staerke(x.u.a) * x.u.preis + (x.u.fx.length ? 6 : 0);
-    leistbar.sort((x, y) => wert(y) - wert(x));
-    const wahl = leistbar[0];
-    // Sparen, wenn eine deutlich stärkere Karte bald bezahlbar ist und das Feld besetzt ist
-    if (feldN >= 2 && teuerste > seite.bank && teuerste <= seite.bank + einkommen(b, s) && wahl.k < teuerste * 0.5 && n === 0) break;
+    let wahl = null;
+    if (!feinde.length && !eigeneAngreifer) wahl = leistbar.filter(greiftAn).sort((x, y) => x.k - y.k)[0] || null;
+    if (!wahl) {
+      const sicher = leistbar.filter(ueberlebt).sort((x, y) => wert(y) - wert(x));
+      if (sicher.length) {
+        wahl = sicher[0];
+        // Sparen, wenn eine deutlich stärkere Karte nächste Runde bezahlbar ist und das Feld schon steht
+        const teuerste = kandidaten.reduce((m, x) => Math.max(m, x.k), 0);
+        if (n === 0 && lebend(seite).length >= 2 && teuerste > seite.bank && teuerste <= seite.bank + einkommen(b, s) && wahl.k < teuerste * 0.5) break;
+      } else {
+        // Nichts Bezahlbares überlebt: sparen, wenn eine teurere Karte in höchstens 2 Zügen bezahlbar ist und überlebt
+        const bald = seite.bank + 2 * einkommen(b, s);
+        if (kandidaten.some((x) => x.k > seite.bank && x.k <= bald && ueberlebt(x))) break;
+        wahl = leistbar.sort((x, y) => wert(y) - wert(x))[0];
+      }
+    }
     const opfer = gegner(b, s).feld;
     let bestSp = ersteFreieSpalte(seite), bestW = -1;
     for (let sp = 0; sp <= Math.max(seite.feld.length, opfer.length); sp++) {

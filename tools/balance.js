@@ -6,7 +6,7 @@ import { DIMENSIONEN, kampfNachId, basisStaerke, belohnung } from '../js/campaig
 const K = CONFIG.kampagne;
 const SETUP_NAMEN = ['Stärkste Karten', 'Kosteneffizient', 'Angriff', 'Verteidigung & Heilung', 'Wildheit', 'Gegenpol', 'Elementvorteil', 'Koloss', 'Schwarm', 'Ausgewogen'];
 const ZIEL_QUOTE = 0.75; // die beste Aufstellung soll ~75 % gewinnen
-const MAX_PACKS = 20000; // darüber ändert sich die Spitze einer Sammlung kaum noch
+const MAX_PACKS = 5000; // darüber ändert sich die Spitze einer Sammlung kaum noch
 
 const $ = (s) => document.querySelector(s);
 const log = (t) => { $('#log').textContent += t + '\n'; $('#log').scrollTop = 1e9; };
@@ -158,9 +158,12 @@ async function lauf({ proben, spiele, schritte, kalProben, kalSpiele }) {
   const zc = zusammenfassung(c);
   log(`Phase C: beste Aufstellung im Mittel ${(zc.besteMittel * 100).toFixed(0)} %, Median ${(zc.medianMittel * 100).toFixed(0)} %. Meist vorn: ${zc.spitzenReiter.slice(0, 3).map(([n, z]) => `${n} (${z}×)`).join(', ')}.`);
   log(`Fertig: ${spieleGesamt.toLocaleString('de-DE')} Spiele in ${((performance.now() - t0) / 1000).toFixed(0)} s.`);
-  window.BALANCE = { a: a.map((m) => ({ ...m.p, quote: m.quote })), kal: kal.map((x) => ({ punkt: `${x.p.szenario} W${x.p.w} S${x.p.l}`, mult: x.mult, noetig: Math.round(x.noetig), gesaettigt: x.gesaettigt })), neu: { ...neu, fortschrittFaktor: undefined }, c: c.map((m) => ({ ...m.p, quote: m.quote })), za, zc, spiele: spieleGesamt };
+  window.BALANCE = { a: a.map((m) => ({ ...m.p, quote: m.quote })), kal: kal.map((x) => ({ punkt: `${x.p.szenario} W${x.p.w} S${x.p.l}`, mult: x.mult, noetig: Math.round(x.noetig), gesaettigt: x.gesaettigt })), neu: { ...neu, fortschrittFaktor: undefined }, c: c.map((m) => ({ ...m.p, quote: m.quote })), za, zc, spiele: spieleGesamt, sekunden: Math.round((performance.now() - t0) / 1000), setups: SETUP_NAMEN };
+  // Ergebnis für die Auswertung speichern (nur mit tools/serve.py)
+  try { await fetch('/__speichern?datei=balance-ergebnis.json', { method: 'POST', body: JSON.stringify(window.BALANCE) }); log('Ergebnis gespeichert: tools/balance-ergebnis.json'); } catch { /* ohne Server */ }
 }
 
 $('#schnell').onclick = () => lauf({ proben: 1, spiele: 4, schritte: 3, kalProben: 1, kalSpiele: 10 });
-$('#voll').onclick = () => lauf({ proben: 4, spiele: 250, schritte: 6, kalProben: 2, kalSpiele: 70 });
+// ~1,1 Mio. Spiele: A und C je 48 × 10 × 20 × 40, Kalibrierung 48 × 7 × 3 × 8 × 40
+$('#voll').onclick = () => lauf({ proben: 20, spiele: 40, schritte: 7, kalProben: 8, kalSpiele: 40 });
 window.balanceLauf = lauf;

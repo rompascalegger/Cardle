@@ -72,8 +72,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if laenge <= 0 or laenge > MAX_BYTES:
             return self.antwort(413, {'fehler': 'Datei leer oder zu groß'})
         daten = self.rfile.read(laenge)
-        os.makedirs(SPRITES, exist_ok=True)
-        with open(os.path.join(SPRITES, name), 'wb') as f:
+        # Ergebnis der Balance-Simulation landet in tools/
+        ziel = os.path.join(WURZEL, 'tools', name) if name == 'balance-ergebnis.json' else os.path.join(SPRITES, name)
+        os.makedirs(os.path.dirname(ziel), exist_ok=True)
+        with open(ziel, 'wb') as f:
             f.write(daten)
         return self.antwort(200, {'ok': True, 'datei': name, 'sprites': len(index_neu())})
 

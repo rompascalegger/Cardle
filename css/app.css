@@ -795,3 +795,9 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .erfolg-abholen { position: absolute; right: 10px; bottom: -10px; animation: puls 1.6s ease-in-out infinite; }
 .erfolg-btn { background: linear-gradient(180deg, #e9d8ff, #b45cff 55%, #5a2d82); color: #fff; border-color: #e9d8ff; box-shadow: 0 3px 0 #2a1450, 0 0 20px rgba(180, 92, 255, .6); }
 .pack.erfolgspack .pack-koerper { background: linear-gradient(160deg, #e9d8ff, #8a5cff 45%, #2a1450); box-shadow: inset 0 0 0 1.4cqw rgba(255, 212, 71, .5), 0 0 40px rgba(180, 92, 255, .6); }
+
+/* Galerie: Silhouetten-Check */
+.gal-silh { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; margin-top: 8px; }
+.gal-silh figure { margin: 0; background: #e9e6f2; border-radius: 8px; padding: 4px; text-align: center; }
+.gal-silh img { width: 100%; filter: brightness(0); }
+.gal-silh figcaption { font-size: 10px; color: #333; }

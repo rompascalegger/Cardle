@@ -8,6 +8,7 @@ import { Rng } from '../rng.js';
 import { S, packOeffnen, aenderung } from '../state.js';
 import { zeremonie } from './packs.js';
 import { h } from './dom.js';
+import { monsterBild } from '../monsterart.js';
 
 export function galerieScreen(root) {
   const wrap = h('section', { class: 'screen galerie' });
@@ -23,6 +24,17 @@ export function galerieScreen(root) {
     const zeige = () => box.replaceChildren(...artenFuerElement(Number(wahl.value)).map((a) => karteElement(karte(a.id, 1 + a.form), { animiert: false, nurMaus: true, rueckseite: 'info', drehbar: true })));
     zeige();
     return h('div', { class: 'panel' }, h('h3', { text: `Alle ${ARTEN.length} Monster` }), wahl, box);
+  };
+  // Silhouetten-Check: nur die Umrisse, schwarz auf hell. Ähnliche Arten fallen hier sofort auf.
+  const silhouetten = () => {
+    const box = h('div', { class: 'gal-silh' });
+    const wahl = h('select', { onchange: () => zeige() }, [h('option', { value: 'alle', text: 'Alle Elemente' }), ...ELEMENTE.map((e, i) => h('option', { value: i, text: e.name }))]);
+    const zeige = () => {
+      const arten = wahl.value === 'alle' ? ARTEN : artenFuerElement(Number(wahl.value));
+      box.replaceChildren(...arten.map((a) => h('figure', { title: `${a.name} · ${a.bauplan} · ${a.merkmal || '-'}` }, h('img', { src: monsterBild(a.id, false).fg, alt: a.name, loading: 'lazy' }), h('figcaption', { text: a.name }))));
+    };
+    zeige();
+    return h('div', { class: 'panel' }, h('h3', { text: 'Silhouetten-Check' }), wahl, box);
   };
   const reihe = (titel, karten) => h('div', { class: 'panel' }, h('h3', { text: titel }), h('div', { class: 'gal-reihe' }, karten.map((c) => karteElement(c, { rueckseite: 'info', drehbar: true }))));
   wrap.append(
@@ -40,6 +52,7 @@ export function galerieScreen(root) {
     reihe('Zusatzlooks', [1, 2, 4, 8, 16, 3, 31].map((m, i) => karte(40 + i * 3, 2, 'keins', m))),
     reihe('Effekte und Kombination', [karte(60, 4, 'holo', 0, [1]), karte(70, 5, 'reverse', 8, [9, 26]), karte(80, 7, 'secret', 31, [14, 38, 51])]),
     alleMonster(),
+    silhouetten(),
   );
   root.append(wrap);
   return {};

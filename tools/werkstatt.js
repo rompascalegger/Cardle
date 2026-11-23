@@ -68,6 +68,26 @@ const KOERPER_EN = {
   schweber: 'floating ghost-like body with a wispy lower half and no legs',
   flieger: 'round body with two large wings',
   humanoid: 'small humanoid body standing upright with arms and legs',
+  insekt: 'insect-like body with a segmented abdomen, six thin legs and antennae',
+  fisch: 'fish-shaped floating body with fins and a forked tail fin',
+  krabbe: 'wide crab-like body with two big pincers, eyes on stalks and many legs',
+  pilz: 'mushroom-shaped creature with a big spotted cap and a stubby stem body',
+  oktopus: 'round octopus-like head with six curling tentacles',
+  vogel: 'bird-like body with a long neck, a beak, thin legs and tail feathers',
+  schnecke: 'snail-like body with a large spiral shell and eye stalks',
+  zweikopf: 'two-headed body with two heads on separate necks',
+  golem: 'blocky golem body made of stone slabs with heavy square arms',
+  raupe: 'caterpillar-like body of round segments with many tiny legs',
+  igel: 'round hedgehog-like body covered in long quills',
+  langhals: 'four-legged long-necked body with a small head and a long tail',
+  qualle: 'floating jellyfish-like bell with dangling tentacles',
+};
+const MERKMAL_EN = {
+  riesenhorn: 'one huge curved horn on its head', geweih: 'large branching antlers', maehne: 'a big spiky mane around its face',
+  segel: 'a tall sail fin on its back', platten: 'a row of armored plates along its back', panzer: 'a heavy armored shell on its back',
+  kiefer: 'a massive underbite jaw with teeth', stosszaehne: 'two big curved tusks', halskrause: 'a wide frill around its head',
+  drittesauge: 'a third eye on a stalk on top of its head', schweif: 'a long flowing plume tail', tentakelbart: 'tentacle-like whiskers under its mouth',
+  fluegelchen: 'small feathery wings on its back', kristallkamm: 'a crest of crystals on its head',
 };
 const AUGEN_EN = { rund: 'big round eyes', boese: 'fierce eyes with angry brows', muede: 'sleepy half-closed eyes', zyklop: 'a single large cyclops eye', katze: 'cat-like slit-pupil eyes', gross: 'huge sparkling eyes', klein: 'small beady eyes', drei: 'three eyes', visier: 'a glowing visor instead of eyes', gluehend: 'glowing eyes without pupils' };
 const MUND_EN = { laecheln: 'a friendly smile', zahn: 'a grin with one small fang', offen: 'an open happy mouth', zickzack: 'a jagged zigzag mouth', schnabel: 'a small beak', keiner: '' };
@@ -89,7 +109,7 @@ export function promptFuer(art, stil = einst.stil) {
   const [rolleWort, rolleText] = (art.form === 0 && ROLLE_JUNG[art.rolle]) || ROLLE_EN[art.rolle] || ['', ''];
   const teile = [
     `${/^[aeiou]/i.test(formWort) ? 'an' : 'a'} ${formWort} ${rolleWort} ${elWort} monster`,
-    KOERPER_EN[art.bauplan], elMotiv, formText, rolleText,
+    KOERPER_EN[art.bauplan], MERKMAL_EN[art.merkmal] || '', elMotiv, formText, rolleText,
     `main color ${farbName(P.body)}, ${farbName(P.belly)} belly, ${farbName(P.acc)} accents, ${farbName(P.iris)} eyes`,
     AUGEN_EN[m.augen], MUND_EN[m.mund], KOPF_EN[m.kopf], MUSTER_EN[m.muster],
     m.schwanz ? SCHWANZ_EN[m.schwanz] : '', m.stacheln ? 'a row of spikes along its back' : '',

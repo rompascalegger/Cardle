@@ -128,8 +128,147 @@ const spin = (cx, cy, dauer, rueck = false) => `<animateTransform attributeName=
 const kreis = (x, y, r, fill, extra = '') => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${fill}" ${extra}/>`;
 const ell = (x, y, rx, ry, fill, extra = '') => `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="${fill}" ${extra}/>`;
 
+// ---------- Weitere Baupläne [Nutzer, 23.11.2026: jedes Monster soll einzigartig aussehen] ----------
+function koerperNeu(bp, r, P) {
+  const S = `stroke="${P.O}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"`;
+  const K = 'url(#kb)', B = 'url(#kc)', O = P.O;
+  const back = [], body = [], A = {};
+  const strich = (d, w, farbe = P.body) => `<path d="${d}" fill="none" stroke="${O}" stroke-width="${w + 5}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${farbe}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const basis = (o) => Object.assign(A, { cx: 110, boden: 150, ...o });
+  switch (bp) {
+    case 'insekt': {
+      for (let i = 0; i < 3; i++) { const x = 90 + i * 16; back.push(`<path d="M${x},114 L${x - 8},130 L${x - 14},148" fill="none" stroke="${O}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`, `<path d="M${x + 4},114 L${x + 14},130 L${x + 20},148" fill="none" stroke="${O}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`); }
+      body.push(ell(140, 108, 32, 22, K, S), `<path d="M118,104 q22,-6 44,0 M120,114 q20,-6 42,0" fill="none" stroke="${dunkel(P.body, 0.3)}" stroke-width="2"/>`, ell(102, 106, 18, 15, K, S), kreis(74, 94, 19, K, S));
+      body.push(`<path d="M66,78 Q58,58 46,52 M82,78 Q88,58 100,50" fill="none" stroke="${O}" stroke-width="2.6" stroke-linecap="round"/>`, kreis(46, 52, 3.5, P.acc, S), kreis(100, 50, 3.5, P.acc, S));
+      A.pfad = 'M108,108 A32,22 0 1 1 172,108 A32,22 0 1 1 108,108Z';
+      return { back, body, A: basis({ eyeX: 72, eyeY: 92, gap: 7, eyeR: 5.5, mundY: 104, mundX: 68, kopfR: 19, krone: { x: 74, y: 76 }, ohren: [{ x: 62, y: 82 }, { x: 86, y: 82 }], ruecken: { x: 138, y: 88 }, schwanz: { x: 170, y: 112 }, brust: { x: 140, y: 112 }, haende: [{ x: 80, y: 148 }, { x: 114, y: 148 }], rx: 32, ry: 22, cy: 108 }) };
+    }
+    case 'fisch': {
+      back.push(`<path d="M154,96 L190,68 L182,96 L190,124Z" fill="url(#kw)" ${S}/>`, `<path d="M92,68 Q112,34 140,66Z" fill="url(#kw)" ${S}/>`);
+      const d = 'M46,96 C66,56 140,56 160,96 C140,136 66,136 46,96Z';
+      body.push(`<path d="${d}" fill="${K}" ${S}/>`, ell(100, 110, 36, 12, B), `<path d="M104,100 q14,6 4,18 q-10,-4 -4,-18z" fill="${P.acc}" ${S}/>`, `<path d="M118,74 q6,22 0,44 M132,78 q5,18 0,36" fill="none" stroke="${dunkel(P.body, 0.25)}" stroke-width="2"/>`);
+      A.pfad = d;
+      return { back, body, A: basis({ eyeX: 76, eyeY: 88, gap: 8, eyeR: 7, mundY: 102, mundX: 56, kopfR: 30, krone: { x: 80, y: 66 }, ohren: [{ x: 70, y: 74 }, { x: 92, y: 70 }], ruecken: { x: 120, y: 66 }, schwanz: { x: 186, y: 96 }, brust: { x: 104, y: 110 }, haende: [{ x: 100, y: 124 }, { x: 120, y: 124 }], boden: 152, schwebt: true, rx: 56, ry: 32, cy: 96 }) };
+    }
+    case 'krabbe': {
+      for (const s of [-1, 1]) for (let i = 0; i < 3; i++) back.push(`<path d="M${110 + s * (30 + i * 8)},116 l${s * 14},14 l${s * 4},18" fill="none" stroke="${O}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`);
+      for (const s of [-1, 1]) { const x = 110 + s * 66; back.push(strich(`M${110 + s * 40},100 Q${110 + s * 58},84 ${x},82`, 8)); body.push(`<path d="M${x - 14 * s},86 C${x - 18 * s},62 ${x + 16 * s},58 ${x + 16 * s},76 L${x + 2 * s},80 L${x + 14 * s},92 C${x + 6 * s},104 ${x - 12 * s},100 ${x - 14 * s},86Z" fill="${K}" ${S}/>`); }
+      const d = 'M58,104 C58,74 162,74 162,104 C162,126 58,126 58,104Z';
+      body.push(`<path d="${d}" fill="${K}" ${S}/>`, ell(110, 112, 34, 10, B, 'opacity=".8"'));
+      body.push(`<path d="M98,82 L94,58 M122,82 L126,58" stroke="${O}" stroke-width="3.4" stroke-linecap="round"/>`);
+      A.pfad = d;
+      return { back, body, A: basis({ eyeX: 110, eyeY: 56, gap: 16, eyeR: 7, mundY: 106, kopfR: 26, krone: { x: 110, y: 78 }, ohren: [{ x: 76, y: 84 }, { x: 144, y: 84 }], ruecken: { x: 140, y: 84 }, schwanz: { x: 160, y: 112 }, brust: { x: 110, y: 112 }, haende: [{ x: 44, y: 96 }, { x: 176, y: 96 }], rx: 52, ry: 26, cy: 102 }) };
+    }
+    case 'pilz': {
+      body.push(`<rect x="88" y="94" width="44" height="54" rx="18" fill="${B}" ${S}/>`);
+      const d = 'M50,94 C50,32 170,32 170,94 Q110,108 50,94Z';
+      body.push(`<path d="${d}" fill="${K}" ${S}/>`);
+      for (const [x, y, rr] of [[82, 66, 9], [118, 54, 11], [146, 76, 8], [104, 80, 6]]) body.push(kreis(x, y, rr, hell(P.belly, 0.4), 'opacity=".9"'));
+      A.pfad = d;
+      return { back, body, A: basis({ eyeX: 110, eyeY: 114, gap: 10, eyeR: 6.5, mundY: 132, kopfR: 22, krone: { x: 110, y: 42 }, ohren: [{ x: 60, y: 84 }, { x: 160, y: 84 }], ruecken: { x: 150, y: 64 }, schwanz: { x: 132, y: 136 }, brust: { x: 110, y: 130 }, haende: [{ x: 84, y: 124 }, { x: 136, y: 124 }], rx: 60, ry: 30, cy: 70 }) };
+    }
+    case 'oktopus': {
+      for (let i = 0; i < 6; i++) { const x = 80 + i * 12, s = i < 3 ? -1 : 1; back.push(strich(`M${x},100 C${x + s * 6},126 ${x + s * 26},132 ${x + s * 22},146`, 9)); }
+      body.push(kreis(110, 74, 38, K, S), ell(110, 92, 22, 12, B, 'opacity=".8"'));
+      A.pfad = 'M72,74 A38,38 0 1 1 148,74 A38,38 0 1 1 72,74Z';
+      return { back, body, A: basis({ eyeX: 110, eyeY: 76, gap: 14, eyeR: 8.5, mundY: 96, kopfR: 38, krone: { x: 110, y: 38 }, ohren: [{ x: 80, y: 52 }, { x: 140, y: 52 }], ruecken: { x: 142, y: 60 }, schwanz: { x: 140, y: 140 }, brust: { x: 110, y: 92 }, haende: [{ x: 66, y: 140 }, { x: 154, y: 140 }], rx: 38, ry: 38, cy: 74 }) };
+    }
+    case 'vogel': {
+      back.push(`<path d="M86,146 L94,124 M104,146 L106,124" stroke="${P.acc}" stroke-width="3.6" stroke-linecap="round"/>`, `<path d="M140,100 L182,86 L176,104 L186,116 L142,116Z" fill="url(#kw)" ${S}/>`);
+      body.push(ell(112, 108, 34, 22, K, S), `<path d="M100,104 C116,92 140,98 146,112 C128,118 110,116 100,104Z" fill="${dunkel(P.body, 0.15)}" ${S}/>`);
+      body.push(strich('M96,100 Q84,80 80,58', 14), kreis(80, 50, 17, K, S), `<path d="M64,48 L44,56 L64,60Z" fill="${P.acc}" ${S}/>`);
+      A.pfad = 'M78,108 A34,22 0 1 1 146,108 A34,22 0 1 1 78,108Z';
+      return { back, body, A: basis({ eyeX: 82, eyeY: 46, gap: 6, eyeR: 5, mundY: 70, mundX: 60, kopfR: 14, krone: { x: 82, y: 34 }, ohren: [{ x: 72, y: 40 }, { x: 92, y: 40 }], ruecken: { x: 122, y: 90 }, schwanz: { x: 184, y: 100 }, brust: { x: 104, y: 114 }, haende: [{ x: 90, y: 146 }, { x: 106, y: 146 }], rx: 34, ry: 22, cy: 108, keinMund: true }) };
+    }
+    case 'schnecke': {
+      body.push(`<path d="M44,146 C50,118 92,116 110,124 C140,128 168,132 184,146Z" fill="${B}" ${S}/>`);
+      body.push(kreis(128, 98, 34, K, S), `<path d="M128,98 m-4,0 a4,4 0 1 1 8,0 a10,10 0 1 1 -20,0 a17,17 0 1 1 34,0 a25,25 0 1 1 -50,0" fill="none" stroke="${dunkel(P.body, 0.35)}" stroke-width="3"/>`);
+      body.push(ell(62, 128, 18, 16, B, S), `<path d="M56,116 L50,90 M68,116 L74,90" stroke="${O}" stroke-width="3" stroke-linecap="round"/>`);
+      A.pfad = 'M94,98 A34,34 0 1 1 162,98 A34,34 0 1 1 94,98Z';
+      return { back, body, A: basis({ eyeX: 62, eyeY: 88, gap: 12, eyeR: 5.5, mundY: 134, mundX: 56, kopfR: 18, krone: { x: 128, y: 64 }, ohren: [{ x: 104, y: 74 }, { x: 152, y: 74 }], ruecken: { x: 150, y: 76 }, schwanz: { x: 182, y: 142 }, brust: { x: 128, y: 104 }, haende: [{ x: 60, y: 146 }, { x: 100, y: 146 }], rx: 34, ry: 34, cy: 98 }) };
+    }
+    case 'zweikopf': {
+      back.push(ell(96, 144, 12, 8, K, S), ell(124, 144, 12, 8, K, S));
+      body.push(strich('M98,108 Q90,92 86,82', 16), strich('M122,108 Q130,90 134,78', 16));
+      body.push(ell(110, 120, 38, 26, K, S), ell(110, 126, 24, 14, B));
+      body.push(kreis(84, 70, 20, K, S));
+      for (const x of [78, 90]) body.push(ell(x, 68, 4.5, 5, '#fff', `stroke="${O}" stroke-width="1.8"`), kreis(x + 0.6, 69, 2.4, '#120a18'));
+      body.push(`<path d="M78,80 q6,4 12,0" fill="none" stroke="${O}" stroke-width="2.2" stroke-linecap="round"/>`, kreis(136, 66, 22, K, S));
+      A.pfad = 'M72,120 A38,26 0 1 1 148,120 A38,26 0 1 1 72,120Z';
+      return { back, body, A: basis({ eyeX: 136, eyeY: 64, gap: 8, eyeR: 6, mundY: 78, mundX: 136, kopfR: 22, krone: { x: 136, y: 44 }, ohren: [{ x: 120, y: 52 }, { x: 152, y: 52 }], ruecken: { x: 140, y: 104 }, schwanz: { x: 146, y: 128 }, brust: { x: 110, y: 126 }, haende: [{ x: 74, y: 128 }, { x: 146, y: 128 }], rx: 38, ry: 26, cy: 120 }) };
+    }
+    case 'golem': {
+      back.push(`<rect x="88" y="126" width="18" height="24" rx="3" fill="${dunkel(P.body, 0.2)}" ${S}/>`, `<rect x="114" y="126" width="18" height="24" rx="3" fill="${dunkel(P.body, 0.2)}" ${S}/>`);
+      body.push(`<rect x="56" y="82" width="22" height="50" rx="5" fill="${K}" ${S}/>`, `<rect x="142" y="82" width="22" height="50" rx="5" fill="${K}" ${S}/>`);
+      body.push(`<rect x="76" y="78" width="68" height="54" rx="7" fill="${K}" ${S}/>`, `<path d="M84,92 l14,6 M136,90 l-10,8 M100,120 l18,-4" stroke="${dunkel(P.dark, 0.2)}" stroke-width="2"/>`);
+      body.push(`<rect x="92" y="44" width="36" height="34" rx="6" fill="${K}" ${S}/>`);
+      A.pfad = 'M76,78 h68 v54 h-68Z';
+      return { back, body, A: basis({ eyeX: 110, eyeY: 58, gap: 8, eyeR: 5, mundY: 70, kopfR: 18, krone: { x: 110, y: 44 }, ohren: [{ x: 92, y: 50 }, { x: 128, y: 50 }], ruecken: { x: 138, y: 84 }, schwanz: { x: 138, y: 128 }, brust: { x: 110, y: 104 }, haende: [{ x: 66, y: 134 }, { x: 152, y: 134 }], rx: 34, ry: 28, cy: 104, guertelY: 124 }) };
+    }
+    case 'raupe': {
+      const segs = [[164, 118, 14], [142, 114, 16], [118, 110, 17], [94, 106, 18]];
+      for (const [x, y, rr] of segs) back.push(`<path d="M${x - 5},${y + rr - 2} l-2,10 M${x + 5},${y + rr - 2} l2,10" stroke="${O}" stroke-width="3" stroke-linecap="round"/>`);
+      for (const [x, y, rr] of segs) body.push(kreis(x, y, rr, K, S), kreis(x, y + rr * 0.45, rr * 0.5, B, 'opacity=".6"'));
+      body.push(kreis(64, 96, 23, K, S), `<path d="M56,74 Q50,56 42,52 M72,74 Q78,56 86,52" fill="none" stroke="${O}" stroke-width="2.6" stroke-linecap="round"/>`, kreis(42, 52, 3.5, P.acc), kreis(86, 52, 3.5, P.acc));
+      A.pfad = 'M41,96 A23,23 0 1 1 87,96 A23,23 0 1 1 41,96Z';
+      return { back, body, A: basis({ eyeX: 62, eyeY: 94, gap: 9, eyeR: 6.5, mundY: 110, mundX: 60, kopfR: 23, krone: { x: 64, y: 72 }, ohren: [{ x: 48, y: 80 }, { x: 80, y: 80 }], ruecken: { x: 130, y: 94 }, schwanz: { x: 178, y: 118 }, brust: { x: 118, y: 116 }, haende: [{ x: 90, y: 134 }, { x: 140, y: 134 }], rx: 23, ry: 23, cy: 96 }) };
+    }
+    case 'igel': {
+      for (let i = 0; i < 13; i++) { const a = Math.PI * (1.05 + i * 0.075), x = 116 + Math.cos(a) * 40, y = 104 + Math.sin(a) * 32; back.push(`<path d="M${f1(x - 6)},${f1(y + 4)} L${f1(116 + Math.cos(a) * 62)},${f1(104 + Math.sin(a) * 52)} L${f1(x + 6)},${f1(y + 4)}Z" fill="${dunkel(P.dark, 0.1)}" ${S}/>`); }
+      back.push(ell(96, 142, 11, 7, K, S), ell(134, 142, 11, 7, K, S));
+      body.push(ell(116, 108, 44, 34, K, S), ell(86, 116, 22, 16, B, S), ell(66, 116, 4, 3, P.O));
+      A.pfad = 'M72,108 A44,34 0 1 1 160,108 A44,34 0 1 1 72,108Z';
+      return { back, body, A: basis({ eyeX: 92, eyeY: 100, gap: 9, eyeR: 6, mundY: 124, mundX: 78, kopfR: 26, krone: { x: 116, y: 74 }, ohren: [{ x: 84, y: 82 }, { x: 108, y: 76 }], ruecken: { x: 146, y: 82 }, schwanz: { x: 158, y: 118 }, brust: { x: 120, y: 118 }, haende: [{ x: 90, y: 146 }, { x: 140, y: 146 }], rx: 44, ry: 34, cy: 108 }) };
+    }
+    case 'langhals': {
+      back.push(strich('M156,108 C184,108 196,86 186,64', 9));
+      for (const [x, dk] of [[110, 0.25], [158, 0.25]]) back.push(`<rect x="${x - 6}" y="116" width="12" height="32" rx="6" fill="${dunkel(P.body, dk)}" ${S}/>`);
+      body.push(ell(132, 110, 38, 22, K, S), ell(130, 118, 24, 9, B));
+      for (const x of [96, 144]) body.push(`<rect x="${x - 6}" y="118" width="12" height="31" rx="6" fill="${K}" ${S}/>`);
+      body.push(strich('M108,102 C90,90 84,70 80,54', 15), kreis(78, 50, 17, K, S), ell(62, 56, 12, 8, B, S));
+      A.pfad = 'M94,110 A38,22 0 1 1 170,110 A38,22 0 1 1 94,110Z';
+      return { back, body, A: basis({ eyeX: 80, eyeY: 46, gap: 7, eyeR: 5, mundY: 60, mundX: 62, kopfR: 16, krone: { x: 80, y: 33 }, ohren: [{ x: 68, y: 38 }, { x: 92, y: 38 }], ruecken: { x: 136, y: 88 }, schwanz: { x: 186, y: 64 }, brust: { x: 128, y: 116 }, haende: [{ x: 96, y: 148 }, { x: 144, y: 148 }], rx: 38, ry: 22, cy: 110 }) };
+    }
+    case 'qualle': {
+      for (let i = 0; i < 7; i++) { const x = 82 + i * 9.5; back.push(`<path d="M${x},96 q${i % 2 ? 8 : -8},12 0,24 q${i % 2 ? -8 : 8},12 0,24" fill="none" stroke="${P.acc}" stroke-width="3" stroke-linecap="round" opacity=".85"/>`); }
+      const d = 'M72,96 C72,38 148,38 148,96 Q138,104 128,96 Q119,104 110,96 Q101,104 92,96 Q82,104 72,96Z';
+      body.push(`<path d="${d}" fill="${K}" ${S} opacity=".92"/>`, ell(100, 62, 16, 9, '#fff', 'opacity=".3"'));
+      A.pfad = d;
+      return { back, body, A: basis({ eyeX: 110, eyeY: 74, gap: 13, eyeR: 7.5, mundY: 90, kopfR: 36, krone: { x: 110, y: 46 }, ohren: [{ x: 82, y: 60 }, { x: 138, y: 60 }], ruecken: { x: 142, y: 64 }, schwanz: { x: 110, y: 142 }, brust: { x: 110, y: 86 }, haende: [{ x: 74, y: 100 }, { x: 146, y: 100 }], boden: 152, schwebt: true, rx: 38, ry: 30, cy: 74 }) };
+    }
+    default: return null;
+  }
+}
+
+// ---------- Erkennungsmerkmal: ein großes, prägendes Teil je Art ----------
+export const MERKMALE = ['riesenhorn', 'geweih', 'maehne', 'segel', 'platten', 'panzer', 'kiefer', 'stosszaehne', 'halskrause', 'drittesauge', 'schweif', 'tentakelbart', 'fluegelchen', 'kristallkamm'];
+function merkmal(typ, A, P) {
+  const O = P.O, S = `stroke="${O}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+  const k = A.krone, rk = A.ruecken, kr = A.kopfR || 24, ex = A.eyeX, ey = A.eyeY, mx = A.mundX ?? A.eyeX, my = A.mundY;
+  const back = [], front = [];
+  switch (typ) {
+    case 'riesenhorn': front.push(`<path d="M${k.x - 7},${k.y + 6} C${k.x - 4},${k.y - 18} ${k.x + 10},${k.y - 34} ${k.x + 24},${k.y - 40} C${k.x + 16},${k.y - 22} ${k.x + 12},${k.y - 4} ${k.x + 8},${k.y + 6}Z" fill="${hell(P.acc, 0.35)}" ${S}/>`); break;
+    case 'geweih': for (const s of [-1, 1]) { const x = k.x + s * 8, y = k.y + 4; back.push(`<path d="M${x},${y} L${x + s * 12},${y - 22} L${x + s * 24},${y - 30} M${x + s * 12},${y - 22} L${x + s * 6},${y - 36} M${x + s * 18},${y - 26} L${x + s * 30},${y - 20}" fill="none" stroke="${O}" stroke-width="7" stroke-linecap="round"/><path d="M${x},${y} L${x + s * 12},${y - 22} L${x + s * 24},${y - 30} M${x + s * 12},${y - 22} L${x + s * 6},${y - 36} M${x + s * 18},${y - 26} L${x + s * 30},${y - 20}" fill="none" stroke="${hell(P.acc, 0.3)}" stroke-width="3.4" stroke-linecap="round"/>`); } break;
+    case 'maehne': { let d = ''; for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2, a2 = a + Math.PI / 14; d += `${i ? 'L' : 'M'}${f1(ex + Math.cos(a) * (kr + 4))},${f1(ey + Math.sin(a) * (kr + 4))} L${f1(ex + Math.cos(a2) * (kr + 16))},${f1(ey + Math.sin(a2) * (kr + 16))} `; } back.push(`<path d="${d}Z" fill="${dunkel(P.acc, 0.15)}" ${S}/>`); break; }
+    case 'segel': back.push(`<path d="M${rk.x - 26},${rk.y + 10} C${rk.x - 20},${rk.y - 34} ${rk.x + 20},${rk.y - 40} ${rk.x + 26},${rk.y + 8}Z" fill="${P.acc}" ${S} opacity=".95"/><path d="M${rk.x - 12},${rk.y + 6} L${rk.x - 8},${rk.y - 26} M${rk.x + 2},${rk.y + 6} L${rk.x + 4},${rk.y - 30} M${rk.x + 14},${rk.y + 6} L${rk.x + 14},${rk.y - 22}" stroke="${O}" stroke-width="1.6" opacity=".6"/>`); break;
+    case 'platten': for (let i = 0; i < 4; i++) { const x = rk.x - 30 + i * 18, y = rk.y + 8 - Math.sin((i / 3) * Math.PI) * 8; back.push(`<path d="M${x - 9},${y + 8} L${x},${y - 18} L${x + 9},${y + 8}Z" fill="${hell(P.acc, 0.1)}" ${S}/>`); } break;
+    case 'panzer': back.push(`<path d="M${rk.x - 34},${rk.y + 22} C${rk.x - 32},${rk.y - 18} ${rk.x + 32},${rk.y - 18} ${rk.x + 34},${rk.y + 22}Z" fill="${dunkel(P.acc, 0.25)}" ${S}/><path d="M${rk.x - 18},${rk.y + 18} L${rk.x - 10},${rk.y - 4} L${rk.x + 10},${rk.y - 4} L${rk.x + 18},${rk.y + 18}" fill="none" stroke="${O}" stroke-width="2" opacity=".7"/>`); break;
+    case 'kiefer': front.push(`<path d="M${mx - 14},${my - 2} L${mx + 14},${my - 2} L${mx + 10},${my + 14} L${mx - 10},${my + 14}Z" fill="${dunkel(P.body, 0.2)}" ${S}/><path d="M${mx - 10},${my - 2} l3,6 3,-6 3,6 3,-6 3,6 3,-6" fill="#fff" stroke="${O}" stroke-width="1.2"/>`); break;
+    case 'stosszaehne': for (const s of [-1, 1]) front.push(`<path d="M${mx + s * 7},${my} C${mx + s * 10},${my + 14} ${mx + s * 18},${my + 18} ${mx + s * 24},${my + 12} C${mx + s * 16},${my + 10} ${mx + s * 12},${my + 4} ${mx + s * 11},${my - 2}Z" fill="#fffbe9" ${S}/>`); break;
+    case 'halskrause': { let d = `M${f1(ex - kr - 20)},${f1(ey + 6)}`; for (let i = 0; i <= 8; i++) { const a = Math.PI * (1 + i / 8); d += ` L${f1(ex + Math.cos(a) * (kr + (i % 2 ? 24 : 14)))},${f1(ey + 6 + Math.sin(a) * (kr + (i % 2 ? 24 : 14)))}`; } back.push(`<path d="${d}Z" fill="${P.acc}" ${S} opacity=".95"/>`); break; }
+    case 'drittesauge': front.push(`<path d="M${k.x},${k.y + 4} L${k.x},${k.y - 14}" stroke="${O}" stroke-width="3"/>`, ell(k.x, k.y - 20, 8, 7, '#fff', `stroke="${O}" stroke-width="2"`), kreis(k.x, k.y - 20, 4, P.iris), kreis(k.x + 1, k.y - 20, 2, '#120a18')); break;
+    case 'schweif': { const s = A.schwanz; back.push(`<path d="M${s.x - 6},${s.y} C${s.x + 24},${s.y - 4} ${s.x + 30},${s.y - 34} ${s.x + 12},${s.y - 46} C${s.x + 20},${s.y - 26} ${s.x + 6},${s.y - 14} ${s.x - 8},${s.y - 8}Z" fill="${hell(P.acc, 0.15)}" ${S}/>`); break; }
+    case 'tentakelbart': for (let i = -1; i <= 1; i++) front.push(`<path d="M${mx + i * 6},${my + 2} q${i * 4 + 3},10 ${i * 2},18 q-4,6 2,10" fill="none" stroke="${O}" stroke-width="5" stroke-linecap="round"/><path d="M${mx + i * 6},${my + 2} q${i * 4 + 3},10 ${i * 2},18 q-4,6 2,10" fill="none" stroke="${P.acc}" stroke-width="2.6" stroke-linecap="round"/>`); break;
+    case 'fluegelchen': for (const s of [-1, 1]) back.push(`<path d="M${rk.x},${rk.y + 6} C${rk.x + s * 10},${rk.y - 24} ${rk.x + s * 36},${rk.y - 30} ${rk.x + s * 42},${rk.y - 14} C${rk.x + s * 30},${rk.y - 12} ${rk.x + s * 24},${rk.y} ${rk.x + s * 4},${rk.y + 10}Z" fill="#ffffff" opacity=".9" ${S}/>`); break;
+    case 'kristallkamm': for (let i = 0; i < 3; i++) back.push(kristall(k.x - 12 + i * 12, k.y + 6, 22 + (i === 1 ? 10 : 0), 5, (i - 1) * 18, hell(P.acc, 0.3), O)); break;
+  }
+  return { back, front };
+}
+
 // ---------- Körper nach Bauplan ----------
 function koerper(bp, r, P) {
+  const neu = koerperNeu(bp, r, P);
+  if (neu) return neu;
   const S = `stroke="${P.O}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"`;
   const K = 'url(#kb)', B = 'url(#kc)';
   const back = [], body = [], A = {};
@@ -654,7 +793,7 @@ export function monsterBild(artId, animiert = true) {
   if (deko.front.length > 2 && r.chance(0.3)) deko.front = deko.front.slice(0, Math.ceil(deko.front.length / 2));
   let augenStil = deko.augenStil || r.pick(AUGEN_STILE);
   if (form === 0 && ['rund', 'klein', 'boese', 'muede'].includes(augenStil)) augenStil = 'gross';
-  let mundStil = bp === 'flieger' && r.chance(0.5) ? 'schnabel' : r.pick(MUENDER);
+  let mundStil = bp === 'vogel' ? 'keiner' : bp === 'flieger' && r.chance(0.5) ? 'schnabel' : r.pick(MUENDER);
   if (form === 0 && ['zahn', 'zickzack', 'keiner'].includes(mundStil)) mundStil = 'laecheln';
   if (augenStil === 'visier' && mundStil === 'offen') mundStil = 'zickzack';
   let kopf = 'keiner';
@@ -669,18 +808,22 @@ export function monsterBild(artId, animiert = true) {
     ? ell(A.eyeX - A.gap * 1.55, A.eyeY + A.eyeR * 1.5, A.eyeR * 0.65, A.eyeR * 0.38, '#ff6b9a', 'opacity=".4"') + ell(A.eyeX + A.gap * 1.55, A.eyeY + A.eyeR * 1.5, A.eyeR * 0.65, A.eyeR * 0.38, '#ff6b9a', 'opacity=".4"')
     : '';
   const sk = FORM_SKALA[form] * (0.97 + r.next() * 0.06);
-  const sy = 0.96 + r.next() * 0.08;
+  // Deutlich verschiedene Proportionen je Art: breit und gedrungen bis schmal und hoch
+  const sx = art.streckung ?? (0.82 + r.next() * 0.36);
+  const sy = (art.hoehe ?? (0.86 + r.next() * 0.28)) / sx ** 0.35;
+  const mk = art.merkmal ? merkmal(art.merkmal, A, P) : { back: [], front: [] };
   const schatten = ell(110, A.boden, (A.schwebt ? 34 : 48) * sk, (A.schwebt ? 5 : 7) * sk, '#000', `opacity="${A.schwebt ? 0.22 : 0.32}" filter="url(#sch)"`);
   const fg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" width="220" height="160">${defs(P)}<defs><clipPath id="kp"><path d="${A.pfad}"/></clipPath></defs>${animiert ? STIL_ANIM : STIL_STATISCH}
-${schatten}<g class="m${A.schwebt ? ' schwebt' : ''}"><g transform="translate(110 ${f1(A.boden)}) scale(${sk.toFixed(3)} ${(sk * sy).toFixed(3)}) translate(-110 ${f1(-A.boden)})">
+${schatten}<g class="m${A.schwebt ? ' schwebt' : ''}"><g transform="translate(110 ${f1(A.boden)}) scale(${(sk * sx).toFixed(3)} ${(sk * sy).toFixed(3)}) translate(-110 ${f1(-A.boden)})">
 ${form === 3 ? `<g>${aura(A, P, r)}</g>` : ''}
 <g>${deko.back.join('')}</g>
+<g>${mk.back.join('')}</g>
 <g>${mitStacheln ? stacheln(A, P) : ''}${schwanzTyp ? schwanz(A, schwanzTyp, P, bp) : ''}</g>
 <g>${back.join('')}</g>
 <g opacity="${deko.koerperOpacity}">${body.join('')}${muster(musterTyp, musterBox(bp, A), P, r)}</g>
 <g>${kopfschmuck(A, kopf, P)}${deko.top.join('')}</g>
 <g>${backen}${augen(A, augenStil, P)}${mund(A, mundStil, P)}</g>
-<g>${deko.front.join('')}</g>
+<g>${deko.front.join('')}${mk.front.join('')}</g>
 ${art.silber ? `<g>${[[44, 36, 5], [176, 44, 4], [58, 118, 3.5], [168, 112, 4.5]].map(([x, y, rr]) => stern(x, y, rr, '#ffffff', 'tw')).join('')}</g>` : ''}
 </g></g></svg>`;
   const rb = seeded(art.kunstSeed + '-bg');

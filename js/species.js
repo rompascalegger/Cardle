@@ -40,7 +40,9 @@ const SILBEN = [
 ];
 const ENDUNGEN = ['ix', 'o', 'ling', 'or', 'ax', 'ino', 'ara', 'on', 'u', 'ex', 'ira', 'elo', 'ek', 'is', 'orn', 'ida', 'us', 'ani', 'ett', 'umo', 'an', 'ox', 'ini', 'ur', 'ette', 'ius', 'ka', 'ilo'];
 
-export const BAUPLAENE = ['blob', 'zweibeiner', 'vierbeiner', 'schlange', 'schweber', 'flieger', 'humanoid'];
+export const BAUPLAENE = ['blob', 'zweibeiner', 'vierbeiner', 'schlange', 'schweber', 'flieger', 'humanoid', 'insekt', 'fisch', 'krabbe', 'pilz', 'oktopus', 'vogel', 'schnecke', 'zweikopf', 'golem', 'raupe', 'igel', 'langhals', 'qualle'];
+// Erkennungsmerkmal je Art (ein großes, prägendes Teil), Liste wie in monsterart.js
+export const MERKMALE = ['riesenhorn', 'geweih', 'maehne', 'segel', 'platten', 'panzer', 'kiefer', 'stosszaehne', 'halskrause', 'drittesauge', 'schweif', 'tentakelbart', 'fluegelchen', 'kristallkamm'];
 const ROLLEN = Object.keys(CONFIG.rollen);
 // [VORSCHLAG] Entwicklungsstufe der Art: Jungtier, jung, ausgewachsen, legendär (nur Aussehen, keine Werte)
 export const FORMEN = ['Jungtier', 'Jung', 'Ausgewachsen', 'Legendär'];
@@ -79,13 +81,30 @@ function namen(el, n, r, vergeben) {
   return out;
 }
 
-function bauplaene(el, n, r) {
-  const vorliebe = BAUPLAN_VORLIEBE[el];
-  const allgemein = BAUPLAENE.filter((b) => b !== 'humanoid' || (vorliebe && vorliebe.includes('humanoid')));
-  const liste = [];
-  if (vorliebe) while (liste.length < Math.ceil(n * 0.45)) liste.push(...vorliebe);
-  while (liste.length < n) liste.push(...r.shuffle(allgemein.slice()));
-  return r.shuffle(liste.slice(0, n));
+// [Nutzer, 23.11.2026: jedes Monster soll einzigartig aussehen]
+// Innerhalb eines Elements bekommt jede Art eine eigene Kombination aus Bauplan und Merkmal,
+// bevorzugte Baupläne des Elements zuerst, danach alle übrigen gemischt.
+function aussehen(el, n) {
+  const r = seeded('aussehen-v2-' + el);
+  const vorne = [...new Set(BAUPLAN_VORLIEBE[el] || [])];
+  const rest = r.shuffle(BAUPLAENE.filter((b) => !vorne.includes(b)));
+  const formen = [...vorne, ...rest];
+  while (formen.length < n) formen.push(...r.shuffle(BAUPLAENE.slice()));
+  const bp = r.shuffle(formen.slice(0, n));
+  const mm = r.shuffle(MERKMALE.slice());
+  const paare = new Set();
+  return bp.map((b, i) => {
+    let j = i;
+    while (paare.has(b + mm[j % mm.length])) j++;
+    paare.add(b + mm[j % mm.length]);
+    return {
+      bauplan: b,
+      merkmal: mm[j % mm.length],
+      // gestaffelte Proportionen: keine zwei Arten eines Elements gleich breit und hoch
+      streckung: Math.round((0.82 + (((i * 7) % n) / (n - 1)) * 0.36) * 1000) / 1000,
+      hoehe: Math.round((0.86 + (((i * 13) % n) / (n - 1)) * 0.28) * 1000) / 1000,
+    };
+  });
 }
 
 function erzeugeArten() {
@@ -95,11 +114,11 @@ function erzeugeArten() {
   for (let el = 0; el < ELEMENTE.length; el++) {
     const r = seeded('arten-' + el);
     const nm = namen(el, proEl, r, vergeben);
-    const bp = bauplaene(el, proEl, r);
+    const look = aussehen(el, proEl);
     const rollen = r.shuffle(Array.from({ length: proEl }, (_, i) => ROLLEN[i % ROLLEN.length]));
     for (let i = 0; i < proEl; i++) {
       const form = Math.min(FORMEN.length - 1, Math.floor((i * FORMEN.length) / proEl));
-      arten.push({ id: arten.length, el, nr: i, name: nm[i], bauplan: bp[i], rolle: rollen[i], form, kunstSeed: `art-${el}-${i}` });
+      arten.push({ id: arten.length, el, nr: i, name: nm[i], rolle: rollen[i], form, kunstSeed: `art-${el}-${i}`, ...look[i] });
     }
   }
   return arten;
@@ -113,7 +132,7 @@ function erzeugeSilberArten(arten) {
     const r = seeded('silber-' + el);
     const nm = namen(el, n, r, vergeben);
     for (let i = 0; i < n; i++) {
-      arten.push({ id: arten.length, el, nr: CONFIG.monster.artenProElement + i, name: nm[i], bauplan: r.pick(BAUPLAENE.filter((b) => b !== 'humanoid' || el === 9)), rolle: r.pick(ROLLEN), form: 2 + (i % 2), kunstSeed: `silber-${el}-${i}`, silber: true, nurKlasse: CONFIG.monster.silberKlasse, gewicht: CONFIG.monster.silberGewicht });
+      arten.push({ id: arten.length, el, nr: CONFIG.monster.artenProElement + i, name: nm[i], bauplan: r.pick(BAUPLAENE), merkmal: r.pick(MERKMALE), rolle: r.pick(ROLLEN), form: 2 + (i % 2), kunstSeed: `silber-${el}-${i}`, silber: true, nurKlasse: CONFIG.monster.silberKlasse, gewicht: CONFIG.monster.silberGewicht });
     }
   }
   return arten;

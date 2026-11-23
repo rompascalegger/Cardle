@@ -60,7 +60,7 @@ function aufbauen() {
           name: weltBoss ? 'Weltenboss' : zwischenboss ? 'Zwischenboss' : `Stufe ${l}`, basis,
           leben: weltBoss ? K.lebenWeltBoss(w) + (kern ? 4 : 0) : zwischenboss ? K.lebenZwischenboss(w) + (kern ? 2 : 0) : K.lebenNormal,
           els: weltElemente(d, w),
-          startBank: (kern ? KERN.gegnerStartBank(w, l) : K.gegnerStartBank(w, l)) + (weltBoss ? 10 : 0),
+          startBank: (kern ? KERN.gegnerStartBank(w, l) : K.gegnerStartBank(w, l)) + (weltBoss ? 5 : 0),
         };
         stufen.push(k);
         alle.push(k);
@@ -125,7 +125,8 @@ const AUFERSTEHUNG = EFFEKTE.find((e) => e.key === 'auferstehung').id;
 export function basisStaerke(k, P = K) {
   const index = (k.welt - 1) * K.stufenProWelt + (k.stufe - 1);
   const bossMal = k.weltBoss ? P.bossFaktor : k.zwischenboss ? P.zwischenbossFaktor : 1;
-  return P.staerkeBasis * P.wachstumProStufe ** index * bossMal;
+  const einstieg = k.welt === 1 ? ((P.einstieg ?? K.einstieg)?.[k.stufe - 1] ?? 1) : 1;
+  return P.staerkeBasis * P.wachstumProStufe ** index * bossMal * einstieg;
 }
 
 export function gegnerTeam(k, fort = {}, zielVorgabe = null) {

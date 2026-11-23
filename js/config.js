@@ -103,7 +103,7 @@ export const CONFIG = {
     spielerLeben: 5, // [FEST]
     teamGrundplaetze: 10, // [VORSCHLAG]
     // Kostenkurve für automatische Teams (aus der Balance-Simulation): je Kostenstufe so viele Karten zuerst
-    teamKurve: [{ bis: 10, anzahl: 3 }, { bis: 20, anzahl: 3 }, { bis: 40, anzahl: 2 }],
+    teamKurve: [{ bis: 10, anzahl: 2 }, { bis: 20, anzahl: 2 }, { bis: 35, anzahl: 3 }, { bis: 50, anzahl: 3 }],
     // [OFFEN] Teamplatz: wie der Multiplikator entsteht. Platzhalter: 1 + 0,2 je Punkt, belegt max(1, Teamplatz) Plätze.
     teamplatzMultProPunkt: 0.2,
     teamplatzMinPlaetze: 1,
@@ -147,15 +147,20 @@ export const CONFIG = {
     weltenProDimension: 8,
     stufenProWelt: 10,
     zwischenbossStufe: 5,
-    staerkeBasis: 60, // Teamstärke des ersten Gegners einer Dimension
-    wachstumProStufe: 1.035, // jede Stufe stärker als die vorige (Welt 8, Stufe 10: ~1400)
-    bossFaktor: 1.5,
-    zwischenbossFaktor: 1.25,
-    // Je mehr Welten insgesamt abgeschlossen sind, desto stärker werden alle Gegner (bis ×2,5)
-    fortschrittFaktor: (weltenFertig) => Math.min(2.5, 1 + 0.03 * weltenFertig),
+    // Werte aus der Balance-Simulation (23.11.2026, 1,09 Mio. Spiele, 10 Teamtypen):
+    // die besten Aufstellungen gewinnen im Schnitt ~54 %, der Median ~2 %. Nur gute Teams kommen durch.
+    staerkeBasis: 193, // Teamstärke des ersten Gegners einer Dimension
+    wachstumProStufe: 1.0, // Steigerung kommt über Einkommen, Startbank, Bosse und Fortschritt
+    bossFaktor: 1.52,
+    zwischenbossFaktor: 1.22,
+    // Einstieg: die ersten drei Kämpfe einer Welt 1 sind leichter (Simulation: Kampf 1 war mit Startkarten kaum zu schaffen)
+    einstieg: [0.6, 0.75, 0.9],
+    // Je mehr Welten insgesamt abgeschlossen sind, desto stärker werden alle Gegner (bis ×1,77)
+    fortschrittFaktor: (weltenFertig) => Math.min(1.77, 1 + 0.001 * weltenFertig),
     // Beschwörung ist der Engpass (10 je Zug): spätere Gegner beschwören mehr und starten mit Vorsprung
-    gegnerEinkommen: (w, l, fertig) => 10 + (w - 1) + Math.floor((l - 1) / 4) + Math.min(8, Math.floor(fertig / 6)),
-    gegnerStartBank: (w, l) => 5 * (w - 1) + 2 * (l - 1),
+    // Aus der Balance-Simulation: Tempo entscheidet die Kämpfe. Früh kein Vorsprung, später langsam mehr.
+    gegnerEinkommen: (w, l, fertig) => 10 + Math.floor((w - 1) / 2) + Math.min(6, Math.floor(fertig / 8)),
+    gegnerStartBank: (w, l) => 3 * (w - 1) + Math.floor((l - 1) / 3),
     lebenNormal: 5,
     lebenZwischenboss: (w) => 6 + Math.floor(w / 3),
     lebenWeltBoss: (w) => 8 + w,

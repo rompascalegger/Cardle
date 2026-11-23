@@ -83,26 +83,28 @@ function sicherung() {
   const info = h('p', { class: 'sicherung-info' });
   const feld = h('textarea', { class: 'sicherung-text', rows: 3, spellcheck: false, placeholder: 'Spielstand hier einfügen …' });
   const melde = (t, fehler = false) => { info.textContent = t; info.classList.toggle('fehler', fehler); };
-  const datei = h('input', { type: 'file', accept: '.json,application/json,text/plain', hidden: true, onchange: async () => { const f = datei.files[0]; if (f) { feld.value = await f.text(); importieren(); } datei.value = ''; } });
+  const datei = h('input', { type: 'file', accept: '.cardle,.txt,text/plain', hidden: true, onchange: async () => { const f = datei.files[0]; if (f) { feld.value = await f.text(); importieren(); } datei.value = ''; } });
 
   const exportieren = async () => {
     await speichern();
-    const text = spielstandExport();
+    let text;
+    try { text = await spielstandExport(); } catch (e) { return melde(e.message, true); }
     const tag = new Date().toISOString().slice(0, 10);
-    const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: `cardle-spielstand-${tag}.json` });
+    const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: `cardle-spielstand-${tag}.cardle` });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     melde('Spielstand als Datei gespeichert.');
   };
   const kopieren = async () => {
     await speichern();
-    const text = spielstandExport();
+    let text;
+    try { text = await spielstandExport(); } catch (e) { return melde(e.message, true); }
     feld.value = text;
     try { await navigator.clipboard.writeText(text); melde('Spielstand in die Zwischenablage kopiert.'); } catch { feld.select(); melde('Text unten markiert: mit Strg+C kopieren.'); }
   };
-  const importieren = () => {
+  const importieren = async () => {
     let p;
-    try { p = spielstandPruefen(feld.value); } catch (e) { return melde(e.message, true); }
+    try { p = await spielstandPruefen(feld.value); } catch (e) { return melde(e.message, true); }
     const wann = p.zeit ? ` vom ${new Date(p.zeit).toLocaleString('de-DE')}` : '';
     modal({
       titel: 'Spielstand importieren?',
@@ -115,7 +117,7 @@ function sicherung() {
   };
   return h('div', { class: 'panel sicherung' },
     h('h3', { text: 'Spielstand sichern' }),
-    h('p', { text: 'Exportiere deinen Spielstand als Datei oder Text, um ihn zu sichern oder auf ein anderes Gerät mitzunehmen.' }),
+    h('p', { text: 'Exportiere deinen Spielstand als Datei oder Text, um ihn zu sichern oder auf ein anderes Gerät mitzunehmen. Der Export ist verschlüsselt (AES-256, Schlüssel per SHA-256) und lässt sich nicht verändern.' }),
     h('div', { class: 'sicherung-knoepfe' },
       h('button', { class: 'btn primaer', text: 'Exportieren (Datei)', onclick: exportieren }),
       h('button', { class: 'btn', text: 'Als Text kopieren', onclick: kopieren }),

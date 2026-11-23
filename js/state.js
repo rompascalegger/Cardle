@@ -188,16 +188,45 @@ export function speichernSpaetestens(ms = 3000) {
   drosselTimer = setTimeout(() => { drosselTimer = null; speichern(); }, ms);
 }
 // ---------- Export / Import ----------
-// Spielstand als Text (JSON). Enthält alles: Karten, Münzen, Packs, Kampagne, Erfolge, Zufallszustand.
-export function spielstandExport() {
-  const d = Object.assign({}, S.d, { karten: S.karten.join(';'), rng: S.rng.getState() });
-  return JSON.stringify({ spiel: 'cardle', format: 1, zeit: new Date().toISOString(), stand: d });
+// Der Export ist verschlüsselt: AES-256-GCM, Schlüssel = SHA-256 über einen festen Spielschlüssel.
+// GCM prüft dabei auch die Echtheit: jede Änderung am Text macht den Import ungültig.
+// Hinweis: Der Spielschlüssel steht im Code der Seite. Das schützt vor einfachem Bearbeiten, nicht vor Entschlossenen.
+const SICHERUNG_PRAEFIX = 'CARDLE1:';
+const SPIELSCHLUESSEL = 'cardle/spielstand/v1/7f3c9a51-e2b4-4d86-9b0e-5a1c3d7e9f24';
+let schluesselCache = null;
+function sicherungsSchluessel() {
+  if (!globalThis.crypto?.subtle) throw new Error('Verschlüsselung ist in diesem Browser nicht verfügbar (nur über https oder localhost).');
+  schluesselCache ??= crypto.subtle.digest('SHA-256', new TextEncoder().encode(SPIELSCHLUESSEL))
+    .then((hash) => crypto.subtle.importKey('raw', hash, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']));
+  return schluesselCache;
 }
-// Prüft den Text und gibt eine kurze Übersicht zurück, ohne etwas zu ändern
-export function spielstandPruefen(text) {
+const zuB64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+const vonB64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+
+// Spielstand als verschlüsselter Text. Enthält alles: Karten, Münzen, Packs, Kampagne, Erfolge, Zufallszustand.
+export async function spielstandExport() {
+  const d = Object.assign({}, S.d, { karten: S.karten.join(';'), rng: S.rng.getState() });
+  const klar = new TextEncoder().encode(JSON.stringify({ spiel: 'cardle', format: 1, zeit: new Date().toISOString(), stand: d }));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const geheim = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await sicherungsSchluessel(), klar));
+  const alles = new Uint8Array(iv.length + geheim.length);
+  alles.set(iv); alles.set(geheim, iv.length);
+  return SICHERUNG_PRAEFIX + zuB64(alles);
+}
+// Entschlüsselt und prüft den Text, gibt eine kurze Übersicht zurück, ohne etwas zu ändern
+export async function spielstandPruefen(text) {
+  const t = String(text).replace(/\s+/g, '');
+  if (!t.startsWith(SICHERUNG_PRAEFIX)) throw new Error('Das ist kein gültiger Cardle-Spielstand.');
   let o;
-  try { o = JSON.parse(String(text).trim()); } catch { throw new Error('Das ist kein gültiger Cardle-Spielstand (kein JSON).'); }
-  const d = o && o.spiel === 'cardle' ? o.stand : o;
+  try {
+    const alles = vonB64(t.slice(SICHERUNG_PRAEFIX.length));
+    const klar = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: alles.subarray(0, 12) }, await sicherungsSchluessel(), alles.subarray(12));
+    o = JSON.parse(new TextDecoder().decode(klar));
+  } catch (e) {
+    if (/nicht verfügbar/.test(e.message)) throw e;
+    throw new Error('Der Spielstand ist beschädigt oder wurde verändert.');
+  }
+  const d = o && o.spiel === 'cardle' ? o.stand : null;
   if (!d || typeof d !== 'object' || typeof d.seed !== 'string' || typeof d.muenzen !== 'number') throw new Error('Das ist kein gültiger Cardle-Spielstand.');
   if (d.karten != null && typeof d.karten !== 'string') throw new Error('Die Kartenliste im Spielstand ist beschädigt.');
   const karten = d.karten ? d.karten.split(';') : [];
@@ -206,7 +235,7 @@ export function spielstandPruefen(text) {
 }
 // Schreibt den Stand in den Speicher und lädt die Seite neu (dabei laufen alle Migrationen)
 export async function spielstandImport(text) {
-  const { d } = spielstandPruefen(text);
+  const { d } = await spielstandPruefen(text);
   S.gesperrt = true;
   const roh = JSON.stringify(d);
   const ok = await IDB.set(SLOT, roh);

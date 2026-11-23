@@ -808,3 +808,18 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .sicherung-text { width: 100%; box-sizing: border-box; font: 11px/1.3 ui-monospace, monospace; background: rgba(0,0,0,.25); color: inherit; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px; resize: vertical; }
 .sicherung-info { min-height: 1.2em; margin: 6px 0 0; font-size: 13px; color: #8ff0b0; }
 .sicherung-info.fehler { color: #ff8a8a; }
+
+/* Team bauen */
+.team-bau { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+.team-bau label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--leise); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.team-bau label.haken { flex-direction: row; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: .88rem; color: var(--text); padding-bottom: 8px; }
+.team-bau input[type=number] { width: 80px; background: var(--panel2); color: var(--text); border: 1px solid var(--rand); border-radius: 10px; padding: 7px 10px; font: 700 .9rem var(--f-ui); }
+.team-bau .tk-knoepfe { margin-left: auto; }
+.kand-kopf { flex-direction: column; align-items: stretch; }
+.kand-leiste { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.kand-leiste h3 { margin: 0 auto 0 0; }
+.kand-leiste .treffer { color: var(--leise); font-size: .85rem; }
+
+/* Sicherheitsabfrage beim Verkaufen */
+.sicher-box ul { margin: 6px 0 10px; padding-left: 20px; font-size: .9rem; }
+.sicher-eingabe { width: 100%; box-sizing: border-box; background: var(--panel2); color: var(--text); border: 2px solid #ff6b6b; border-radius: 10px; padding: 9px 12px; font: 800 1.05rem var(--f-ui); letter-spacing: .12em; text-transform: uppercase; }

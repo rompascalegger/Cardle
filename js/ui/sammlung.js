@@ -14,10 +14,12 @@ import { karteVergroessern } from './lupe.js';
 
 const STANDARD = {
   ansicht: 'monster', suche: '', el: -1, klMin: 0, klMax: 7, stufeMin: 1, holo: 'alle', look: 'alle', fx: 'alle',
-  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, team: 'alle', besitz: 'alle',
+  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, team: 'alle', besitz: 'alle',
   sort: 'nr', ab: false, seite: 0, offen: false,
 };
 const F = { ...STANDARD };
+const ALBUM_F = F;
+export const FILTER_STANDARD = STANDARD;
 const PRO_SEITE = { monster: 80, karten: 60 };
 const LOOK_FARBEN = ['#7ad8ff', '#9a8cff', '#e8e8e8', '#5ffff0', '#ff9fcf'];
 const LOOK_KURZ = ['↔', '↕', 'Inv', 'Gl', 'FD'];
@@ -41,7 +43,7 @@ function ausfKurz(holo, looks) {
 }
 
 // Alle Karten einmal entschlüsseln (für Filter und Sortierung)
-function datenLaden() {
+export function datenLaden() {
   const team = new Set(S.d.team);
   return S.karten.map((code, i) => {
     const c = dekodiere(code);
@@ -49,7 +51,7 @@ function datenLaden() {
   });
 }
 
-function passt(x) {
+export function passt(x, F = ALBUM_F) {
   const c = x.c;
   if (F.suche && !x.art.name.toLowerCase().includes(F.suche.toLowerCase())) return false;
   if (F.el >= 0 && x.art.el !== F.el) return false;
@@ -69,19 +71,20 @@ function passt(x) {
   if (F.form >= 0 && x.art.form !== F.form) return false;
   if (F.attrMin > 0 && (c.a[F.attr] || 0) < F.attrMin) return false;
   if (F.staerkeMin > 0 && x.sum < F.staerkeMin) return false;
+  if (F.kostenMax > 0 && x.kost > F.kostenMax) return false;
   if (F.team === 'im' && !x.team) return false;
   if (F.team === 'nicht' && x.team) return false;
   return true;
 }
-const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'team'].some((k) => F[k] !== STANDARD[k]);
+const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team'].some((k) => F[k] !== STANDARD[k]);
 
-const SORTEN = [
+export const SORTEN = [
   ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
   ['kosten', 'Beschwörungskosten'], ['wert', 'Verkaufswert'], ['neu', 'Neueste'],
   ...ATTRIBUTE.map((a) => ['attr:' + a.key, a.name]),
   ['anzahl', 'Anzahl (Monster)'], ['ausf', 'Ausführungen (Monster)'],
 ];
-function kartenWert(x) {
+export function kartenWert(x, F = ALBUM_F) {
   switch (F.sort) {
     case 'name': return x.art.name;
     case 'element': return x.art.el;
@@ -96,7 +99,60 @@ function kartenWert(x) {
       return x.art.id;
   }
 }
-const vergleich = (a, b) => (typeof a === 'string' ? a.localeCompare(b, 'de') : a - b);
+export const vergleich = (a, b) => (typeof a === 'string' ? a.localeCompare(b, 'de') : a - b);
+
+// Sicherheitsabfrage: Sind Karten mit Spezialeffekt dabei, muss „VERKAUFEN“ eingetippt werden. [Nutzer, 23.11.2026]
+const SICHERHEITSWORT = 'VERKAUFEN';
+export function sicherVerkaufen(indizes, weiter) {
+  const mitEffekt = indizes.filter((i) => dekodiere(S.karten[i]).fx.length);
+  if (!mitEffekt.length) { weiter(); return; }
+  const eingabe = h('input', { type: 'text', class: 'sicher-eingabe', autocomplete: 'off', spellcheck: false, placeholder: SICHERHEITSWORT });
+  let knopf = null;
+  const pruefe = () => { if (knopf) knopf.disabled = eingabe.value.trim().toUpperCase() !== SICHERHEITSWORT; };
+  eingabe.addEventListener('input', pruefe);
+  eingabe.addEventListener('keydown', (e) => { if (e.key === 'Enter' && knopf && !knopf.disabled) knopf.click(); });
+  const namen = mitEffekt.slice(0, 6).map((i) => { const c = dekodiere(S.karten[i]); return `<li><b>${esc(ARTEN[c.art].name)}</b> · ${c.fx.map((id) => esc(EFFEKTE.find((e) => e.id === id)?.name || '?')).join(', ')}</li>`; }).join('');
+  const m = modal({
+    titel: 'Spezialeffekt-Karten verkaufen?',
+    inhalt: h('div', { class: 'sicher-box' },
+      h('p', { html: `Du verkaufst <b>${fmt(mitEffekt.length)}</b> ${mitEffekt.length === 1 ? 'Karte' : 'Karten'} mit Spezialeffekt. Effekte sind sehr selten und gehen beim Verkauf für immer verloren.` }),
+      h('ul', { html: namen + (mitEffekt.length > 6 ? `<li>… und ${fmt(mitEffekt.length - 6)} weitere</li>` : '') }),
+      h('p', { html: `Tippe <b>${SICHERHEITSWORT}</b>, um zu bestätigen:` }), eingabe),
+    knoepfe: [{ text: 'Abbrechen' }, { text: 'Endgültig verkaufen', klasse: 'gefahr', aktion: () => { if (eingabe.value.trim().toUpperCase() !== SICHERHEITSWORT) return false; weiter(); } }],
+  });
+  knopf = m.box.querySelector('.modal-fuss .gefahr');
+  pruefe();
+  setTimeout(() => eingabe.focus(), 50);
+}
+
+// Filterfelder für jede Karteneigenschaft (Album und Team nutzen dieselben). neu() zeichnet die Liste neu.
+export function filterFelder(F, neu, { ohne = [] } = {}) {
+  const geaendert = () => { F.seite = 0; neu(); };
+  const sel = (key, optionen, zahl = false) => h('select', {
+    onchange: (e) => { F[key] = zahl ? Number(e.target.value) : e.target.value; geaendert(); },
+  }, optionen.map(([v, t]) => h('option', { value: v, selected: F[key] === v, text: t })));
+  const feld = (titel, ...inhalt) => (ohne.includes(titel) ? null : h('label', {}, h('span', { text: titel }), ...inhalt));
+  const suche = h('input', { type: 'search', value: F.suche, placeholder: 'Name …' });
+  suche.addEventListener('input', () => { F.suche = suche.value; geaendert(); });
+  const zahl = (key, max) => { const i = h('input', { type: 'number', min: 0, max, value: F[key] }); i.addEventListener('change', () => { F[key] = Math.max(0, Number(i.value) || 0); geaendert(); }); return i; };
+  return h('div', { class: 'sm-filterbox' },
+    feld('Name', suche),
+    feld('Element', sel('el', [[-1, 'Alle'], ...ELEMENTE.map((e, i) => [i, e.name])], true)),
+    feld('Klasse von – bis', h('div', { class: 'doppel' }, sel('klMin', KLASSEN.map((k, i) => [i, k.name]), true), sel('klMax', KLASSEN.map((k, i) => [i, k.name]), true))),
+    feld('Seltenheit ab', sel('stufeMin', CONFIG.seltenheit.namen.map((n, i) => [i + 1, n]), true)),
+    feld('Holo-Stufe', sel('holo', [['alle', 'Alle'], ['keins', 'ohne Holo'], ['irgendein', 'mit Holo'], ['reverse', 'Reverse Holo'], ['holo', 'Holo'], ['secret', 'Secret Holo'], ['ghost', 'Ghost Rare']])),
+    feld('Zusatzlook', sel('look', [['alle', 'Alle'], ['keiner', 'ohne Look'], ['irgendein', 'mit Look'], ...LOOKS.map((l, i) => [String(i), l.name])])),
+    feld('Spezialeffekt', sel('fx', [['alle', 'Alle'], ['ohne', 'ohne Effekt'], ['mit', 'mit Effekt'], ...EFFEKTE.map((e) => [String(e.id), e.name])])),
+    feld('Rolle', sel('rolle', [['alle', 'Alle'], ...Object.entries(CONFIG.rollen).map(([k, r]) => [k, r.name])])),
+    feld('Bauplan', sel('bauplan', [['alle', 'Alle'], ...BAUPLAENE.map((b) => [b, b[0].toUpperCase() + b.slice(1)])])),
+    feld('Entwicklung', sel('form', [[-1, 'Alle'], ...FORMEN.map((f, i) => [i, f])], true)),
+    feld('Attribut mindestens', h('div', { class: 'doppel' }, sel('attr', ATTRIBUTE.map((a) => [a.key, a.name])), zahl('attrMin', 99))),
+    feld('Stärke mindestens', zahl('staerkeMin', 200)),
+    feld('Kosten höchstens', zahl('kostenMax', 999)),
+    feld('Team', sel('team', [['alle', 'Alle'], ['im', 'im Team'], ['nicht', 'nicht im Team']])),
+    feld('Monster', sel('besitz', [['alle', 'Alle'], ['entdeckt', 'nur entdeckte'], ['fehlend', 'nur fehlende']])),
+  );
+}
 
 export function sammlungScreen(root) {
   const wrap = h('section', { class: 'screen sammlung' });
@@ -125,34 +181,14 @@ export function sammlungScreen(root) {
         h('div', { class: 'sm-ansicht' }, [['monster', 'Monster'], ['karten', 'Alle Karten']].map(([v, t]) => h('button', { class: F.ansicht === v ? 'an' : '', text: t, onclick: () => { F.ansicht = v; F.seite = 0; zeichneKopf(); zeichneGrid(); } }))),
         sel('sort', SORTEN, false),
         h('button', { class: 'btn klein', text: F.ab ? '↓ absteigend' : '↑ aufsteigend', onclick: () => { F.ab = !F.ab; zeichneKopf(); zeichneGrid(); } }),
-        h('button', { class: 'btn klein' + (F.offen ? ' an' : ''), text: kartenFilterAktiv() || F.el >= 0 ? 'Filter ●' : 'Filter', onclick: () => { F.offen = !F.offen; zeichneKopf(); } }),
+        h('button', { class: 'btn klein' + (F.offen ? ' an' : ''), text: kartenFilterAktiv() || F.el >= 0 ? 'Filter ●' : 'Filter', onclick: () => { F.offen = !F.offen; zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein', text: 'Zurücksetzen', onclick: () => { Object.assign(F, { ...STANDARD, ansicht: F.ansicht, offen: F.offen }); zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein', html: `${ICON.muenze} Doppelte verkaufen …`, onclick: () => verkaufsDialog(neuLaden) }),
         h('span', { class: 'treffer' })),
       F.offen ? filterBox() : null,
     );
   };
-  const filterBox = () => {
-    const suche = h('input', { type: 'search', value: F.suche, placeholder: 'Name …' });
-    suche.addEventListener('input', () => { F.suche = suche.value; F.seite = 0; zeichneGrid(); });
-    const zahl = (key, max) => { const i = h('input', { type: 'number', min: 0, max, value: F[key] }); i.addEventListener('change', () => { F[key] = Math.max(0, Number(i.value) || 0); F.seite = 0; zeichneGrid(); }); return i; };
-    return h('div', { class: 'sm-filterbox' },
-      feld('Name', suche),
-      feld('Element', sel('el', [[-1, 'Alle'], ...ELEMENTE.map((e, i) => [i, e.name])], true)),
-      feld('Klasse von – bis', h('div', { class: 'doppel' }, sel('klMin', KLASSEN.map((k, i) => [i, k.name]), true), sel('klMax', KLASSEN.map((k, i) => [i, k.name]), true))),
-      feld('Seltenheit ab', sel('stufeMin', CONFIG.seltenheit.namen.map((n, i) => [i + 1, n]), true)),
-      feld('Holo-Stufe', sel('holo', [['alle', 'Alle'], ['keins', 'ohne Holo'], ['irgendein', 'mit Holo'], ['reverse', 'Reverse Holo'], ['holo', 'Holo'], ['secret', 'Secret Holo'], ['ghost', 'Ghost Rare']])),
-      feld('Zusatzlook', sel('look', [['alle', 'Alle'], ['keiner', 'ohne Look'], ['irgendein', 'mit Look'], ...LOOKS.map((l, i) => [String(i), l.name])])),
-      feld('Spezialeffekt', sel('fx', [['alle', 'Alle'], ['ohne', 'ohne Effekt'], ['mit', 'mit Effekt'], ...EFFEKTE.map((e) => [String(e.id), e.name])])),
-      feld('Rolle', sel('rolle', [['alle', 'Alle'], ...Object.entries(CONFIG.rollen).map(([k, r]) => [k, r.name])])),
-      feld('Bauplan', sel('bauplan', [['alle', 'Alle'], ...BAUPLAENE.map((b) => [b, b[0].toUpperCase() + b.slice(1)])])),
-      feld('Entwicklung', sel('form', [[-1, 'Alle'], ...FORMEN.map((f, i) => [i, f])], true)),
-      feld('Attribut mindestens', h('div', { class: 'doppel' }, sel('attr', ATTRIBUTE.map((a) => [a.key, a.name])), zahl('attrMin', 99))),
-      feld('Stärke mindestens', zahl('staerkeMin', 200)),
-      feld('Team', sel('team', [['alle', 'Alle'], ['im', 'im Team'], ['nicht', 'nicht im Team']])),
-      feld('Monster', sel('besitz', [['alle', 'Alle'], ['entdeckt', 'nur entdeckte'], ['fehlend', 'nur fehlende']])),
-    );
-  };
+  const filterBox = () => filterFelder(F, zeichneGrid);
 
   const zeichneGrid = () => {
     const treffer = daten.filter(passt);
@@ -265,11 +301,13 @@ export function sammlungScreen(root) {
             const x = xVon(c);
             if (!x || x.team) return;
             const wertvoll = x.st >= 3 || c.kl >= 4 || c.fx.length;
-            if (wertvoll && bestaetigen !== x.i) { bestaetigen = x.i; knopf.innerHTML = `Wirklich verkaufen? +${fmt(verkaufswert(c))}`; knopf.classList.add('gefahr'); return; }
-            const r = verkaufen([x.i]);
-            Sound.muenze();
-            toast(`Verkauft: +${fmt(r.muenzen)} Münzen`);
-            zu(); neuLaden();
+            if (wertvoll && !c.fx.length && bestaetigen !== x.i) { bestaetigen = x.i; knopf.innerHTML = `Wirklich verkaufen? +${fmt(verkaufswert(c))}`; knopf.classList.add('gefahr'); return; }
+            sicherVerkaufen([x.i], () => {
+              const r = verkaufen([x.i]);
+              Sound.muenze();
+              toast(`Verkauft: +${fmt(r.muenzen)} Münzen`);
+              zu(); neuLaden();
+            });
           },
         },
       ],
@@ -310,10 +348,13 @@ function verkaufsDialog(nachher) {
   const m = modal({
     titel: 'Doppelte Karten verkaufen', inhalt,
     knoepfe: [{ text: 'Abbrechen' }, { text: 'Verkaufen', klasse: 'primaer', aktion: () => {
-      const r = verkaufen(treffer);
-      Sound.muenze();
-      toast(`${fmt(r.anzahl)} Karten verkauft: +${fmt(r.muenzen)} Münzen`);
-      nachher && nachher();
+      const liste = treffer.slice();
+      sicherVerkaufen(liste, () => {
+        const r = verkaufen(liste);
+        Sound.muenze();
+        toast(`${fmt(r.anzahl)} Karten verkauft: +${fmt(r.muenzen)} Münzen`);
+        nachher && nachher();
+      });
     } }],
   });
   knopf = m.box.querySelector('.modal-fuss .primaer');
@@ -358,7 +399,7 @@ export function stapelDetail(artId, nachher) {
     const imTeam = S.d.team.includes(auswahl);
     const verkauf = h('button', {
       class: 'btn klein', disabled: imTeam, html: imTeam ? 'Im Team, nicht verkaufbar' : `${ICON.muenze} Diese Karte verkaufen +${fmt(verkaufswert(c))}`,
-      onclick: () => { const r = verkaufen([auswahl]); Sound.muenze(); toast(`Verkauft: +${fmt(r.muenzen)} Münzen`); auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); },
+      onclick: () => { const ziel = auswahl; sicherVerkaufen([ziel], () => { const r = verkaufen([ziel]); Sound.muenze(); toast(`Verkauft: +${fmt(r.muenzen)} Münzen`); auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); }); },
     });
     links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), verkauf);
 

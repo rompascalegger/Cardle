@@ -407,26 +407,44 @@ export function teamSetzen(team) {
 }
 // Automatisch aufstellen: zuerst einige günstige Karten für die ersten Züge (10 Beschwörungspunkte je Zug),
 // dann die stärksten Karten, solange die Plätze reichen [Nutzer, 21.11.2026]
-export function teamAutomatisch() {
-  const kand = [];
-  for (let i = 0; i < S.karten.length; i++) { const c = karte(i); kand.push({ i, c, w: staerke(c.a) + plaetzeBringt(c) * 3, k: kosten(c) }); }
+// Team bauen. Strategien:
+//   kurve      Kostenkurve: günstige Karten für den Start, dann die stärksten (Balance-Simulation, Standard)
+//   staerke    die stärksten Karten zuerst
+//   effizienz  meiste Stärke je Beschwörungspunkt
+//   guenstig   billigste zuerst: viele Karten, schnell auf dem Feld
+//   reihenfolge  genau in der übergebenen Reihenfolge (z. B. Sortierung im Teambildschirm)
+// kandidaten: Kartenindizes (null = ganze Sammlung), behalten: aktuelles Team bleibt und wird aufgefüllt,
+// einmalig: jedes Monster höchstens einmal, maxKarten: Obergrenze.
+export function teamBauen({ kandidaten = null, strategie = 'kurve', behalten = false, einmalig = false, maxKarten = 24 } = {}) {
+  const idx = kandidaten ?? S.karten.map((_, i) => i);
+  const kand = idx.map((i, pos) => { const c = karte(i); const k = kosten(c); return { i, c, pos, k, s: staerke(c.a), w: staerke(c.a) + plaetzeBringt(c) * 3 }; });
   const team = [];
   const genommen = new Set();
+  const arten = new Set();
   let belegt = 0, gesamt = CONFIG.kampf.teamGrundplaetze;
   const nimm = (x) => {
     const b = plaetzeBelegt(x.c), g = plaetzeBringt(x.c);
-    if (genommen.has(x.i) || belegt + b > gesamt + g) return false;
-    team.push(x.i); genommen.add(x.i); belegt += b; gesamt += g; return true;
+    if (team.length >= maxKarten || genommen.has(x.i) || (einmalig && arten.has(x.c.art)) || belegt + b > gesamt + g) return false;
+    team.push(x.i); genommen.add(x.i); arten.add(x.c.art); belegt += b; gesamt += g; return true;
   };
-  // Kostenkurve: günstige Karten für die ersten Züge, mittlere für danach, dann die stärksten (Balance-Simulation)
-  kand.sort((a, b) => b.w - a.w);
-  for (const stufe of CONFIG.kampf.teamKurve) {
+  if (behalten) for (const i of S.d.team) { const c = karte(i); team.push(i); genommen.add(i); arten.add(c.art); belegt += plaetzeBelegt(c); gesamt += plaetzeBringt(c); }
+  const ordnung = {
+    kurve: (a, b) => b.w - a.w,
+    staerke: (a, b) => b.s - a.s || b.c.kl - a.c.kl,
+    effizienz: (a, b) => b.s / Math.max(1, b.k) - a.s / Math.max(1, a.k),
+    guenstig: (a, b) => a.k - b.k || b.s - a.s,
+    reihenfolge: (a, b) => a.pos - b.pos,
+  }[strategie] || ((a, b) => b.w - a.w);
+  kand.sort(ordnung);
+  if (strategie === 'kurve') for (const stufe of CONFIG.kampf.teamKurve) {
     let n = 0;
     for (const x of kand) { if (n >= stufe.anzahl) break; if (x.k <= stufe.bis && nimm(x)) n++; }
   }
-  for (const x of kand) { if (team.length >= 24) break; nimm(x); }
+  for (const x of kand) nimm(x);
   teamSetzen(team);
+  return team.length;
 }
+export const teamAutomatisch = () => teamBauen();
 
 export const artName = (id) => ARTEN[id].name;
 

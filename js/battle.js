@@ -157,16 +157,20 @@ function verliereLeben(b, s, grund) {
 }
 
 // ---------- Tod ----------
+// Effekte beim Tod wirken sofort, auch im Zug der Beschwörung (Fehler bis 24.11.2026: Zweiter Atem, Auferstehung und
+// Todeseffekte griffen erst ab dem Folgezug, eine früh getötete Karte kam nie zurück). Nur ein Bann in diesem Zug hebt sie auf.
+const wirktImTod = (b, u, key) => (u.fx.includes(key) || u.kopie === key) && u.gebanntZug !== b.zug;
+
 function stirb(b, u, killer) {
   const seite = b.seiten[u.seite];
-  if (aktiv(b, u, 'zweiteratem') && !u.atemGenutzt) {
+  if (wirktImTod(b, u, 'zweiteratem') && !u.atemGenutzt) {
     u.atemGenutzt = true;
     u.schaden = Math.floor(maxLeben(b, u) / 2);
     emit(b, { t: 'atem', seite: u.seite, uid: u.uid });
     log(b, `${u.name} kommt mit Zweitem Atem zurück.`);
     return false;
   }
-  if (aktiv(b, u, 'auferstehung') && !u.auferstanden) {
+  if (wirktImTod(b, u, 'auferstehung') && !u.auferstanden) {
     u.auferstanden = true;
     u.schaden = 0;
     emit(b, { t: 'atem', seite: u.seite, uid: u.uid, text: 'Auferstehung!' });
@@ -174,7 +178,7 @@ function stirb(b, u, killer) {
     return false;
   }
   // Todeseffekte vor dem Tod prüfen: danach gilt die Karte als tot und aktiv() wäre falsch (Fehler bis 24.11.2026)
-  const todFx = { letzterwille: aktiv(b, u, 'letzterwille'), lebenslicht: aktiv(b, u, 'lebenslicht'), erinnerung: aktiv(b, u, 'erinnerung') };
+  const todFx = { letzterwille: wirktImTod(b, u, 'letzterwille'), lebenslicht: wirktImTod(b, u, 'lebenslicht'), erinnerung: wirktImTod(b, u, 'erinnerung') };
   u.tot = true; u.todZug = b.zug;
   const sp = seite.feld.indexOf(u);
   if (sp >= 0) seite.feld[sp] = null;

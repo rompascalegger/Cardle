@@ -1,6 +1,7 @@
 // Kampagne (Welten, Bosse) und Kampfansicht. [FEST 12] automatischer Kampf, Beschwörung, 5 Leben.
 import { CONFIG, KLASSEN } from '../config.js';
 import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
+import { SORTEN, kartenWert, vergleich, fundDaten } from './sammlung.js';
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
 import { attrIcon } from '../attributes.js';
@@ -13,6 +14,8 @@ import { DIMENSIONEN, KERN_DIM, TIEF_DIM, istKern, tiefOffen, kampfNachId, freig
 import { dailyKampf, dailyGegner, dailyTeam, dailyTeamWaehlen, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
 import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
 import { karteVergroessern } from './lupe.js';
+import { ARTEN } from '../species.js';
+import { trivia } from '../trivia.js';
 import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend } from '../battle.js';
 import { h, modal, toast, warte, anim, ICON, fmt, fmt1, schuetteln, partikel, konfetti } from './dom.js';
 
@@ -321,7 +324,9 @@ export function kampfScreen(root, nav, { id, daily = null }) {
 <div class="kf-brett"><div class="kf-spalten"></div><div class="kf-flug"></div></div>
 <div class="kf-mitte"><span class="kf-zug"></span><span class="kf-phase"></span></div>
 <div class="kf-seite spieler"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-knoepfe"></div></div>
+<div class="kf-hand-leiste"></div>
 <div class="kf-hand"></div>
+<div class="kf-friedhoefe"></div>
 <details class="kf-log"><summary>Kampfprotokoll</summary><div class="kf-log-inhalt"></div></details>`;
   root.append(wrap);
   const q = (s) => wrap.querySelector(s);
@@ -340,7 +345,46 @@ export function kampfScreen(root, nav, { id, daily = null }) {
 <div class="eh-hp"><i></i><span></span></div>
 <div class="eh-werte"></div><div class="eh-fx"></div>`;
     aktualisiereKachel(t, u);
+    // Hover zeigt alle Infos zur Karte [Nutzer, 24.11.2026]
+    t.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') infoZeigen(u, t); });
+    t.addEventListener('pointerleave', () => infoVerbergen());
     return t;
+  };
+  const infoBox = h('div', { class: 'kf-info', hidden: true });
+  document.body.append(infoBox);
+  const infoVerbergen = () => { infoBox.hidden = true; };
+  // Kachel wurde neu gezeichnet oder Maus ist woanders: Infos ausblenden (pointerleave feuert dann nicht)
+  const infoPruefen = (e) => { if (!infoBox.hidden && !(e.target instanceof Element && e.target.closest('.einheit') && document.contains(e.target))) infoVerbergen(); };
+  addEventListener('pointermove', infoPruefen);
+  addEventListener('scroll', infoVerbergen, true);
+  const infoZeigen = (u, t) => {
+    if (v.nachZiehen) return;
+    const ES = CONFIG.effektStufen;
+    const w = werte(b, u);
+    const el = angezeigtesEl(u, 0);
+    const versteckt = lebenVerborgen(b, u, 0);
+    const imSpiel = b.seiten[u.seite].feld.includes(u);
+    const rest = restLeben(b, u), max = maxLeben(b, u);
+    const kosten = effektiveKosten(b, u.seite, u);
+    const tr = trivia(u.art);
+    const fxZeilen = [...u.fx, ...(u.kopie ? [u.kopie] : [])].map((key) => {
+      const e = EFFEKT_BY_KEY[key]; const st = u.fxStufe?.[key] || 1;
+      const status = u.tot ? `im Friedhof seit Zug ${u.todZug}` : !imSpiel ? (e.blitz ? 'wirkt beim Beschwören' : 'wirkt ab dem Zug nach dem Beschwören') : u.gebanntZug === b.zug ? 'gebannt in diesem Zug' : b.zug < u.aktivAb ? `aktiv ab Zug ${u.aktivAb}` : 'aktiv';
+      return `<div class="kfi-fx" style="--fxc:${ES.farben[st - 1]}"><b>${e.blitz ? '⚡' : '✦'} ${esc(e.name)}</b> <i>${ES.namen[st - 1]} · ${status}</i><div>${esc(effektText(e.id, st))}</div></div>`;
+    }).join('');
+    const z = (key, name, wert) => `<span>${attrIcon(key)} ${name} <b>${wert}</b></span>`;
+    infoBox.innerHTML = `<div class="kfi-kopf"><b>${esc(u.name)}</b><span>${u.seite ? 'Gegner' : 'Du'} · ${esc(ELEMENTE[el].name)} · ${esc(CONFIG.rollen[ARTEN[u.art].rolle].name)} · ${KLASSEN[u.c.kl].name}</span></div>
+<div class="kfi-zeile"><span>Leben <b>${versteckt ? '?' : `${fmt1(Math.max(0, rest))}/${max}`}</b></span><span>Kosten <b>${ICON.beschwoerung}${kosten}</b></span>${w.mult > 1 ? `<span>Angriff <b>×${zahl(w.mult)}</b></span>` : ''}</div>
+<div class="kfi-werte">${z('kraft', 'Kraft', w.kraft)}${z('schutz', 'Schutz', w.schutz)}${z('schlagzahl', 'Schläge', w.schlag)}${z('wildheit', 'Wildheit', w.wild)}${z('groesse', 'Größe', w.groesse)}${z('seltsamkeit', 'Seltsamkeit', w.selt)}${u.a.heilung ? z('heilung', 'Heilung', u.a.heilung) : ''}</div>
+${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
+<p class="kfi-trivia">${esc(tr.text)}</p>`;
+    infoBox.hidden = false;
+    const r = t.getBoundingClientRect(), bw = infoBox.offsetWidth, bh = infoBox.offsetHeight;
+    let x = r.right + 10, y = r.top;
+    if (x + bw > innerWidth - 8) x = r.left - bw - 10;
+    if (x < 8) x = Math.max(8, Math.min(innerWidth - bw - 8, r.left));
+    if (y + bh > innerHeight - 8) y = Math.max(8, innerHeight - bh - 8);
+    infoBox.style.left = `${x}px`; infoBox.style.top = `${y}px`;
   };
   const aktualisiereKachel = (t, u, hp = null) => {
     const max = maxLeben(b, u);
@@ -353,7 +397,8 @@ export function kampfScreen(root, nav, { id, daily = null }) {
     const z = (key, wert, tip) => `<span data-tip="${tip}: ${wert}">${attrIcon(key)}<b>${wert}</b></span>`;
     t.querySelector('.eh-werte').innerHTML = z('kraft', w.kraft, 'Elementarkraft') + z('schutz', w.schutz, 'Elementarschutz') + z('wildheit', w.wild, 'Wildheit') + z('schlagzahl', w.schlag, 'Schlagzahl') + (w.groesse ? z('groesse', w.groesse, 'Größe') : '') + (w.selt ? z('seltsamkeit', w.selt, 'Seltsamkeit') : '') + (u.a.heilung ? z('heilung', u.a.heilung, 'Heilung je Runde') : '') + (w.mult > 1 ? `<span data-tip="Teamplatz-Multiplikator">×${zahl(w.mult)}</span>` : '');
     const fx = [...u.fx, ...(u.kopie ? [u.kopie] : [])];
-    t.querySelector('.eh-fx').innerHTML = fx.map((key) => { const e = EFFEKT_BY_KEY[key]; const an = b.zug >= u.aktivAb && u.gebanntZug !== b.zug; const st = u.fxStufe?.[key] || 1; return `<span class="${an ? 'an' : ''}" style="--fxc:${CONFIG.effektStufen.farben[st - 1]}" data-tip="${esc(e.name)} (${CONFIG.effektStufen.namen[st - 1]})${an ? '' : ' (noch nicht aktiv)'}: ${esc(effektText(e.id, st))}">${e.blitz ? '⚡' : '✦'}</span>`; }).join('');
+    // Effekte sichtbar als Zeilen mit Name und Seltenheit [Nutzer, 24.11.2026]; blass = noch nicht aktiv oder gebannt
+    t.querySelector('.eh-fx').innerHTML = fx.map((key) => { const e = EFFEKT_BY_KEY[key]; const an = b.zug >= u.aktivAb && u.gebanntZug !== b.zug; const st = u.fxStufe?.[key] || 1; return `<span class="eh-fx-zeile${an ? ' an' : ''}" style="--fxc:${CONFIG.effektStufen.farben[st - 1]}">${e.blitz ? '⚡' : '✦'} ${esc(e.name)}${e.skaliert ? ` <b>${'I II III IV V'.split(' ')[st - 1]}</b>` : ''}</span>`; }).join('');
     const el = angezeigtesEl(u, 0);
     t.style.setProperty('--el', farbe(el));
     t.querySelector('.eh-siegel').innerHTML = glyphSVG(el) + (u.elZug !== u.el && (u.seite === 0 || u.enthuellt || u.falschEl == null) ? '<i class="versch">↻</i>' : '');
@@ -387,7 +432,22 @@ export function kampfScreen(root, nav, { id, daily = null }) {
     const seite = b.seiten[s];
     return Array.from({ length: Math.max(seite.maxLeben, seite.leben) }, (_, i) => (i < seite.leben ? ICON.herz : ICON.herzLeer)).join('');
   };
+  // Friedhof [Nutzer, 24.11.2026]: besiegte Karten beider Seiten, mit Hover-Infos
+  const friedhofOffen = { 0: true, 1: false };
+  const zeichneFriedhof = () => {
+    const box = q('.kf-friedhoefe');
+    if (!box) return;
+    box.replaceChildren(...[0, 1].map((s) => {
+      const tote = b.seiten[s].friedhof;
+      const d = h('details', { class: 'kf-friedhof' + (s ? ' gegner' : ''), open: friedhofOffen[s] && tote.length > 0 });
+      d.addEventListener('toggle', () => { friedhofOffen[s] = d.open; });
+      d.append(h('summary', { html: `☠ ${s ? 'Friedhof Gegner' : 'Dein Friedhof'} <b>${tote.length}</b>` }),
+        tote.length ? h('div', { class: 'kf-friedhof-karten' }, tote.slice().reverse().map((u) => { const t = kachel(u); t.classList.add('tot'); t.append(h('div', { class: 'eh-tod', text: `☠ Zug ${u.todZug}` })); return t; })) : h('p', { class: 'leise', text: 'Noch keine besiegten Karten.' }));
+      return d;
+    }));
+  };
   const zeichneSeiten = () => {
+    zeichneFriedhof();
     for (const [s, cls] of [[0, 'spieler'], [1, 'gegner']]) {
       const seite = b.seiten[s];
       const box = q(`.kf-seite.${cls}`);
@@ -411,10 +471,40 @@ export function kampfScreen(root, nav, { id, daily = null }) {
       h('button', { class: 'btn leise-btn', text: 'Aufgeben', onclick: () => { if (!b.ende) { b.ende = { sieger: 1, grund: 'aufgegeben' }; ende(); } } }),
     );
   };
+  // Sortierung der Hand wie im Teambau [Nutzer, 24.11.2026], Auswahl wird gespeichert
+  const HAND_SORTEN = [['rolle-staerke', 'Rolle, dann Stärke'], ['staerke', 'Stärke'], ['kosten-jetzt', 'Kosten'], ['beschwoerbar', 'Beschwörbar zuerst'], ...SORTEN.filter(([k]) => !['anzahl', 'ausf', 'staerke', 'kosten', 'nr', 'neu', 'wert'].includes(k))];
+  const handSort = () => S.d.einst.handSort || { sort: 'rolle-staerke', ab: true };
+  const zeichneHandLeiste = () => {
+    const hs = handSort();
+    q('.kf-hand-leiste').replaceChildren(
+      h('span', { class: 'leise', text: 'Hand sortieren:' }),
+      h('select', { onchange: (e) => { S.d.einst.handSort = { ...hs, sort: e.target.value }; speichernBald(); zeichneHand(); } }, HAND_SORTEN.map(([w, t]) => h('option', { value: w, selected: hs.sort === w, text: t }))),
+      h('button', { class: 'btn klein', text: hs.ab ? '↓ absteigend' : '↑ aufsteigend', onclick: () => { S.d.einst.handSort = { ...hs, ab: !hs.ab }; speichernBald(); zeichneHandLeiste(); zeichneHand(); } }));
+  };
+  const handReihenfolge = () => {
+    const seite = b.seiten[0];
+    const hs = handSort();
+    const r = hs.ab ? -1 : 1;
+    const ROLLEN_ORD = Object.keys(CONFIG.rollen);
+    const liste = seite.hand.map((u, i) => ({ u, i, x: fundDaten(u.c), k: effektiveKosten(b, 0, u) }));
+    const wert = (e) => {
+      switch (hs.sort) {
+        case 'staerke': return e.x.sum;
+        case 'kosten-jetzt': return e.k;
+        case 'beschwoerbar': return (e.k <= seite.bank ? 1e6 : 0) + e.x.sum;
+        default: return kartenWert(e.x, { sort: hs.sort });
+      }
+    };
+    liste.sort((a, c) => (hs.sort === 'rolle-staerke'
+      ? ROLLEN_ORD.indexOf(a.x.art.rolle) - ROLLEN_ORD.indexOf(c.x.art.rolle) || r * (a.x.sum - c.x.sum) // Rolle in fester Reihenfolge, darin nach Stärke
+      : r * vergleich(wert(a), wert(c))) || a.i - c.i);
+    return liste.map((e) => e.i);
+  };
   const zeichneHand = () => {
     const hand = q('.kf-hand');
     const seite = b.seiten[0];
-    hand.replaceChildren(...seite.hand.map((u, i) => {
+    if (!q('.kf-hand-leiste').childElementCount) zeichneHandLeiste();
+    hand.replaceChildren(...handReihenfolge().map((i) => [seite.hand[i], i]).map(([u, i]) => {
       const k = effektiveKosten(b, 0, u);
       const t = kachel(u);
       t.classList.add('in-hand');
@@ -700,7 +790,7 @@ export function kampfScreen(root, nav, { id, daily = null }) {
 
   zeichneAlles();
   neuerZug();
-  return { verlassen: () => { v.aus = true; removeEventListener('pointermove', bewegen); removeEventListener('pointerup', loslassen); removeEventListener('pointercancel', loslassen); } };
+  return { verlassen: () => { v.aus = true; infoBox.remove(); removeEventListener('pointermove', infoPruefen); removeEventListener('scroll', infoVerbergen, true); removeEventListener('pointermove', bewegen); removeEventListener('pointerup', loslassen); removeEventListener('pointercancel', loslassen); } };
 }
 
 export { lebend };

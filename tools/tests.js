@@ -274,6 +274,9 @@ const effektTests = {
   lebenslicht: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['lebenslicht']), kk({ schutz: 20 })], [kk({ kraft: 30, schlagzahl: 1 })]); leg(0, 0, 0); leg(0, 0, 1); leg(1, 0, 0); const vor = b.seiten[0].leben; b.zug = 2; kampf(b); return b.seiten[0].leben === vor + 2; },
   herzstueck: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['herzstueck'])], []); const vor = b.seiten[0].leben; leg(0, 0, 0); zugBeginn(b); return b.seiten[0].leben === vor + 2; },
   zweiteratem: () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['zweiteratem'])], [kk({ kraft: 30, schlagzahl: 1 })]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return !u.tot && u.atemGenutzt; },
+  'zweiteratem-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['zweiteratem'])], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return !u.tot && u.atemGenutzt && b.seiten[0].feld.includes(u); },
+  'auferstehung-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['auferstehung'])], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return !u.tot && u.schaden === 0; },
+  'erinnerung-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['erinnerung']), kk({ kraft: 5 })], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return u.tot && b.seiten[0].hand.length === 0 && b.seiten[0].friedhof.includes(u); },
   bann: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['bann'], [3])], [kk({ kraft: 5, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.bannBis === b.zug + 2; },
   eintrittsstich: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['eintrittsstich'], [4])], [kk({ schutz: 20 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.schaden === 8; },
   schrumpfzauber: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['schrumpfzauber'], [2])], [kk({ kraft: 10, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return werte(b, z).kraft === 6; },
@@ -288,7 +291,7 @@ const effektTests = {
   dornen: () => { const { b, leg } = szenario([kk({ kraft: 1, schlagzahl: 1, schutz: 30 })], [kk({ schutz: 30 }, ['dornen'])]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return u.schaden === 3; },
   regeneration: () => { const { b, leg } = szenario([kk({ schutz: 10 }, ['regeneration'])], []); const u = leg(0, 0, 0); u.schaden = 5; zugBeginn(b); return u.schaden === 2; },
 };
-for (const [key, f] of Object.entries(effektTests)) test(`Effekt im Kampf: ${EFFEKTE.find((e) => e.key === key).name}`, f);
+for (const [key, f] of Object.entries(effektTests)) { const [k0, zusatz] = key.split('-'); test(`Effekt im Kampf: ${EFFEKTE.find((e) => e.key === k0).name}${zusatz ? ` (${zusatz}: im Zug der Beschwörung getötet)` : ''}`, f); }
 
 const ok = ergebnisse.filter((e) => e.ok).length;
 document.getElementById('summe').textContent = `${ok} / ${ergebnisse.length} Tests bestanden`;

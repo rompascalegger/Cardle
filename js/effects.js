@@ -64,7 +64,7 @@ export const EFFEKTE = [
   // [Nutzer, 21.11.2026] nur für Bosse: die stärkste Karte eines Weltenbosses kehrt einmal mit vollen Lebenspunkten zurück
   E(54, 'auferstehung', 'Auferstehung', 'Stirbt diese Karte, kehrt sie einmal mit vollen Lebenspunkten zurück.', 3.0, { nurBoss: true }),
   // ---------- Neue, skalierende Effekte (Stufe n = Seltenheit 1–5) ----------
-  S(55, 'bann', 'Bann', (n) => `Beim Eintritt kann die gegenüberliegende Karte ${n} ${n === 1 ? 'Zug' : 'Züge'} nicht angreifen.`),
+  S(55, 'bann', 'Bann', (n) => `Beim Eintritt kann die gegenüberliegende Karte ${n} ${n === 1 ? 'Zug' : 'Züge'} nicht angreifen.`, { blitz: true }),
   S(56, 'giftstachel', 'Giftstachel', (n) => `Getroffene Gegner sind vergiftet: ${n} Schaden zu Beginn der nächsten zwei Züge.`),
   S(57, 'flink', 'Flink', (n) => `${12 * n} % Chance, einem Treffer auszuweichen, bei Größe 0–1 doppelt so hoch.`),
   S(58, 'winzlingswut', 'Winzlingswut', (n) => `Bei Größe 0–1: +${2 * n} Elementarkraft.`),

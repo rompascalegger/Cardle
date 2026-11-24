@@ -916,3 +916,35 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .lx-stufe.hat { opacity: 1; background: color-mix(in srgb, var(--fxc) 18%, transparent); }
 .lx-besitz { text-align: right; }
 .lx-besitz b { font-size: 1.1rem; color: var(--text); }
+
+/* Kampf: Effekte sichtbar, Hand-Sortierung, Hover-Infos [Nutzer, 24.11.2026] */
+.einheit.mit-fx { height: auto; min-height: 172px; }
+.eh-fx { position: static; display: flex; flex-direction: column; gap: 2px; font-size: .58rem; }
+.eh-fx .eh-fx-zeile { opacity: .5; color: #fff; background: color-mix(in srgb, var(--fxc) 28%, rgba(10, 6, 24, .75)); border-left: 3px solid var(--fxc); border-radius: 4px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: none; }
+.eh-fx .eh-fx-zeile.an { opacity: 1; }
+.eh-fx .eh-fx-zeile b { color: var(--fxc); }
+.kf-hand-leiste { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 8px 0; flex-wrap: wrap; }
+.kf-hand-leiste select { max-width: 220px; }
+.kf-info { position: fixed; z-index: 900; width: 300px; max-width: calc(100vw - 16px); padding: 10px 12px; border-radius: 12px; background: rgba(16, 10, 34, .97); border: 1px solid var(--rand); box-shadow: 0 12px 30px rgba(0, 0, 0, .55); font-size: .82rem; pointer-events: none; color: var(--text); }
+.kfi-kopf b { display: block; font-size: 1rem; }
+.kfi-kopf span { color: var(--leise); font-size: .76rem; }
+.kfi-zeile { display: flex; gap: 12px; margin: 6px 0; flex-wrap: wrap; }
+.kfi-werte { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .05); }
+.kfi-werte span { display: flex; align-items: center; gap: 4px; }
+.kfi-werte b { margin-left: auto; }
+.kfi-h { margin: 8px 0 4px; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--gold, #ffd447); font-weight: 800; }
+.kfi-fx { border-left: 3px solid var(--fxc); padding: 2px 0 2px 7px; margin-bottom: 4px; }
+.kfi-fx b { color: var(--fxc); }
+.kfi-fx i { color: var(--leise); font-style: normal; font-size: .72rem; }
+.kfi-trivia { margin: 8px 0 0; font-style: italic; color: #d9cdf0; opacity: .85; font-size: .76rem; }
+.kf-friedhoefe { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 8px 0; }
+@media (max-width: 700px) { .kf-friedhoefe { grid-template-columns: 1fr; } }
+.kf-friedhof { background: rgba(10, 6, 24, .45); border: 1px solid var(--rand); border-radius: 12px; padding: 6px 10px; }
+.kf-friedhof summary { cursor: pointer; font-weight: 800; color: var(--leise); }
+.kf-friedhof summary b { color: var(--text); margin-left: 4px; }
+.kf-friedhof-karten { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 4px; }
+.kf-friedhof .einheit.tot { width: 92px; height: auto; min-height: 0; filter: grayscale(.85) brightness(.75); transform: none; }
+.kf-friedhof .einheit.tot .eh-bild { height: 64px; }
+.kf-friedhof .einheit.tot:hover { filter: grayscale(.3) brightness(.95); }
+.eh-tod { font-size: .62rem; text-align: center; color: #ffb3c0; font-weight: 800; }
+.kfi-werte svg, .kfi-zeile svg { width: 14px; height: 14px; flex: none; }

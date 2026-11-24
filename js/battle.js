@@ -410,6 +410,17 @@ function geplantesZiel(b, u, D, spalte, w, bereits, geplant) {
   return { lebende, gegenueber, kand, koeder };
 }
 
+// Kurze Erklärung fürs Kampfprotokoll, warum ein Schlag kein Ziel findet [Nutzer, 24.11.2026]
+function keinZielGrund(b, u, w, lebende, gegenueber, bereits) {
+  const andere = lebende.filter((t) => !bereits.has(t.uid));
+  const kurz = `${gegenueber.name} gegenüber wurde in diesem Zug schon getroffen`;
+  if (!andere.length) return { kurz: 'alle schon getroffen', text: 'alle Gegner wurden in diesem Zug schon getroffen, jeder Schlag braucht ein neues Ziel' };
+  if (w.wild < 1) return { kurz: 'braucht Wildheit', text: `${kurz}, und ohne Wildheit kann es kein anderes Ziel wählen` };
+  if (andere.every((t) => aktiv(b, t, 'tarnung'))) return { kurz: 'Ziel getarnt', text: `${kurz}, die übrigen Gegner sind getarnt` };
+  const kleinste = Math.min(...andere.map((t) => t.a.groesse));
+  return { kurz: 'Ziele zu groß', text: `${kurz}, die übrigen Gegner sind zu groß (Größe ab ${kleinste}, Wildheit nur ${w.wild})` };
+}
+
 // Ein einzelner Angriff eines Monsters: Ziel und Aufteilung nach dem aktuellen Stand des Feldes
 function planeAngriff(b, u, spalte, w, bereits) {
   const D = gegner(b, u.seite);
@@ -421,7 +432,7 @@ function planeAngriff(b, u, spalte, w, bereits) {
     bereits.add(t.uid);
     return { typ: 'wahllos', teile: [{ t, punkte: w.kraft }], wahllos: true };
   }
-  if (!kand.length) return gegenueber ? { typ: 'kein' } : { typ: 'leere', punkte: w.kraft }; // Verteidiger wählt [FEST 12.4]
+  if (!kand.length) return gegenueber ? { typ: 'kein', grund: keinZielGrund(b, u, w, lebende, gegenueber, bereits) } : { typ: 'leere', punkte: w.kraft }; // Verteidiger wählt [FEST 12.4]
   const teile = verteile(b, u, w, kand, koeder, new Map());
   for (const tl of teile) bereits.add(tl.t.uid);
   return { typ: w.wild >= 1 ? 'frei' : 'direkt', teile };
@@ -535,7 +546,7 @@ export function kampf(b) {
       versuche[s]++;
       const tr = planeAngriff(b, u, b.seiten[s].feld.indexOf(u), w, bereits);
       if (tr.typ === 'leer') { emit(b, { t: 'angriff', seite: s, von: u.uid, leer: true }); continue; }
-      if (tr.typ === 'kein') { emit(b, { t: 'angriff', seite: s, von: u.uid, kein: true }); continue; }
+      if (tr.typ === 'kein') { log(b, `${u.name}: Schlag ${k + 1} von ${w.schlag} ohne Ziel – ${tr.grund.text}.`); emit(b, { t: 'angriff', seite: s, von: u.uid, kein: true, grund: tr.grund.kurz }); continue; }
       let teile = tr.teile;
       if (tr.typ === 'leere') { const t = verteidigerWahl(b, u, D, tr.punkte, w); teile = t ? [{ t, punkte: tr.punkte }] : []; }
       for (const tl of teile) { if (u.tot) break; if (!tl.t.tot) treffe(b, u, tl.t, tl.punkte, !!tr.wahllos, w, tr.typ); }

@@ -65,6 +65,9 @@ function neuerStand() {
     pity: 0,
     karten: '', // kodierte Karten, ';'-getrennt
     team: [],
+    favoriten: [], // Kartenindizes, nie verkaufbar [Spielerfeedback 24.11.2026]
+    teamSlots: Array.from({ length: CONFIG.kampf.teamSlots }, (_, n) => ({ name: `Team ${n + 1}`, team: [] })), // gespeicherte Teams, aktives = S.d.team
+    teamSlot: 0,
     kampagne: { v: CONFIG.kampagne.version, fortschritt: {}, siege: 0, niederlagen: 0 },
     stat: { packs: 0, karten: 0, besteStufe: 1, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), autoPacks: 0, muenzenAusgegeben: 0 },
     einst: { lautstaerke: 0.45, stumm: false, bewegung: 'auto', aufdecken: 'normal' },
@@ -148,6 +151,12 @@ export async function laden() {
   if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 1000000; }
   baueIndex();
   S.d.team = (S.d.team || []).filter((i) => i < S.karten.length);
+  S.d.favoriten = (S.d.favoriten || []).filter((i) => i < S.karten.length);
+  if (!Array.isArray(S.d.teamSlots)) S.d.teamSlots = [];
+  while (S.d.teamSlots.length < CONFIG.kampf.teamSlots) S.d.teamSlots.push({ name: `Team ${S.d.teamSlots.length + 1}`, team: [] });
+  S.d.teamSlot = Math.min(S.d.teamSlot || 0, S.d.teamSlots.length - 1);
+  for (const sl of S.d.teamSlots) sl.team = (sl.team || []).filter((i) => i < S.karten.length);
+  S.d.teamSlots[S.d.teamSlot].team = S.d.team.slice();
 }
 
 // Ändert sich die Zahl der Arten je Element, bleiben Element und Nummer einer Art erhalten.
@@ -349,7 +358,8 @@ export function lookAuftragen(i, lookIdx) {
 // ---------- Verkaufen ----------
 // Entfernt Karten aus der Sammlung (Indizes verschieben sich, Team wird umgerechnet). Teamkarten werden nie verkauft.
 export function verkaufen(indizes) {
-  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i)));
+  const fav = new Set(S.d.favoriten);
+  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i) && !fav.has(i)));
   if (!weg.size) return { anzahl: 0, muenzen: 0 };
   let muenzen = 0;
   const neu = [], umrechnung = new Map();
@@ -359,7 +369,10 @@ export function verkaufen(indizes) {
     neu.push(code);
   });
   S.karten = neu;
-  S.d.team = S.d.team.map((i) => umrechnung.get(i)).filter((i) => i != null);
+  const umrechnen = (liste) => liste.map((i) => umrechnung.get(i)).filter((i) => i != null);
+  S.d.team = umrechnen(S.d.team);
+  S.d.favoriten = umrechnen(S.d.favoriten);
+  for (const sl of S.d.teamSlots) sl.team = umrechnen(sl.team);
   S.d.muenzen += muenzen;
   S.d.stat.verkauft = (S.d.stat.verkauft || 0) + weg.size;
   baueIndex();
@@ -370,7 +383,7 @@ export function verkaufen(indizes) {
 
 // Doppelte, schwache Karten finden: je Monster und Ausführung bleiben die stärksten `behalten` Karten.
 export function doppelteFinden({ behalten = 1, bisKlasse = 1, nurNormal = true, ohneEffekte = true } = {}) {
-  const team = new Set(S.d.team);
+  const team = new Set([...S.d.team, ...S.d.favoriten]);
   const out = [];
   for (const st of S.stapel.values()) {
     const gruppen = new Map();
@@ -402,6 +415,7 @@ export function teamPlaetze(team = S.d.team) {
 }
 export function teamSetzen(team) {
   S.d.team = team.slice();
+  if (S.d.teamSlots) S.d.teamSlots[S.d.teamSlot].team = team.slice();
   aenderung('team');
   speichernBald();
 }
@@ -445,6 +459,29 @@ export function teamBauen({ kandidaten = null, strategie = 'kurve', behalten = f
   return team.length;
 }
 export const teamAutomatisch = () => teamBauen();
+
+// ---------- Teamslots und Favoriten [Spielerfeedback 24.11.2026] ----------
+export function teamSlotWaehlen(n) {
+  if (!S.d.teamSlots[n]) return;
+  S.d.teamSlot = n;
+  S.d.team = S.d.teamSlots[n].team.filter((i) => i < S.karten.length);
+  aenderung('team');
+  speichernBald();
+}
+export function teamSlotUmbenennen(n, name) {
+  const sl = S.d.teamSlots[n];
+  if (!sl) return;
+  sl.name = String(name).trim().slice(0, 24) || `Team ${n + 1}`;
+  aenderung('team');
+  speichernBald();
+}
+export const istFavorit = (i) => S.d.favoriten.includes(i);
+export function favoritUmschalten(i) {
+  S.d.favoriten = istFavorit(i) ? S.d.favoriten.filter((x) => x !== i) : [...S.d.favoriten, i];
+  aenderung('sammlung');
+  speichernBald();
+  return istFavorit(i);
+}
 
 export const artName = (id) => ARTEN[id].name;
 

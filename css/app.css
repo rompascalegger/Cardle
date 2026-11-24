@@ -823,3 +823,19 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 /* Sicherheitsabfrage beim Verkaufen */
 .sicher-box ul { margin: 6px 0 10px; padding-left: 20px; font-size: .9rem; }
 .sicher-eingabe { width: 100%; box-sizing: border-box; background: var(--panel2); color: var(--text); border: 2px solid #ff6b6b; border-radius: 10px; padding: 9px 12px; font: 800 1.05rem var(--f-ui); letter-spacing: .12em; text-transform: uppercase; }
+
+/* Teamslots und Favoriten */
+.team-slots { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.team-slot { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--rand); background: var(--panel2); color: var(--text); cursor: pointer; font: 700 .9rem var(--f-ui); min-width: 96px; }
+.team-slot small { color: var(--leise); font-weight: 600; font-size: .75rem; }
+.team-slot.an { border-color: #ffd447; box-shadow: 0 0 0 2px rgba(255, 212, 71, .35); }
+.fav-marke { position: absolute; top: 6px; left: 6px; z-index: 3; color: #ffd447; font-size: 1.25rem; text-shadow: 0 0 6px #000, 0 0 2px #000; pointer-events: none; }
+.fav-knopf.an { border-color: #ffd447; color: #ffd447; }
+
+/* Aktive Filter als Chips */
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.filter-chips .leise { font-size: .8rem; margin-right: 2px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid #ffd447; background: rgba(255, 212, 71, .12); color: var(--text); font: 700 .8rem var(--f-ui); cursor: pointer; }
+.filter-chip b { color: #ffd447; }
+.filter-chip:hover { background: rgba(255, 212, 71, .25); }
+.filter-chip.alle { border-color: var(--rand); background: transparent; color: var(--leise); }

@@ -175,7 +175,7 @@ export function dailyScreen(root, nav) {
   wrap.append(h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Daily Challenges</h2><span>Neue Gegner in <b>${Math.floor(rest / 36e5)} h ${Math.floor((rest % 36e5) / 6e4)} min</b></span><span>Serie <b>${d.serie || 0}</b> Tag${d.serie === 1 ? '' : 'e'}</span></div><p class="leise">Jede Klasse hat ihre eigene Challenge. Es kämpfen nur deine Karten genau dieser Klasse gegen ein Team derselben Klasse. Jede Challenge gibt einmal am Tag eine Belohnung.</p>` }));
   const grid = h('div', { class: 'daily-grid' });
   KLASSEN.forEach((kl, i) => {
-    const k = dailyKampf(i);
+    const k = dailyKampf(i, undefined, dailyTeam(i).verfuegbar);
     const { team, verfuegbar } = dailyTeam(i);
     const eigene = team.reduce((x, j) => x + staerke(karte(j).a), 0);
     const ti = teamInfo(dailyGegner(k));
@@ -237,7 +237,7 @@ export function erfolgeMelden(neu) {
 const TEMPI = [1, 2, 3, 5, 10]; // [Nutzer, 21.11.2026] bis ×10
 export function kampfScreen(root, nav, { id, daily = null }) {
   const fortschritt = S.d.kampagne.fortschritt;
-  const k = daily != null ? dailyKampf(daily) : kampfNachId(id);
+  const k = daily != null ? dailyKampf(daily, undefined, dailyTeam(daily).verfuegbar) : kampfNachId(id);
   const eigenTeam = daily != null ? dailyTeam(daily).team : S.d.team;
   if (!k || !eigenTeam.length) { nav(daily != null ? 'daily' : 'kampagne'); return {}; }
   const kw = daily != null ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fortschritt);
@@ -494,7 +494,7 @@ export function kampfScreen(root, nav, { id, daily = null }) {
         case 'angriff': {
           const t0 = kachelVon(e.von);
           if (e.leer) { blase(t0, 'freies Feld!'); Sound.treffer(0.5); await warte(D(250)); break; }
-          if (e.kein) { blase(t0, 'kein Ziel'); await warte(D(150)); break; }
+          if (e.kein) { blase(t0, e.grund ? `kein Ziel: ${e.grund}` : 'kein Ziel'); zeichneLog(); await warte(D(150)); break; }
           const tz = kachelVon(e.ziel);
           await geschoss(t0, tz, t0?.style.getPropertyValue('--el') || '#fff');
           Sound.treffer(e.f);

@@ -147,9 +147,10 @@ test('Stärke = Summe der Attribute, im Klassenbereich, Obergrenzen eingehalten'
   }
   return { ok: !fehler, info: fehler };
 });
-test('Kosten = Stärke × Preisfaktoren (Beschwörungsverstärker ×3)', () => {
-  const c = { art: 0, kl: 0, a: { kraft: 1, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx: [1] };
-  return kosten(c) === 3;
+test('Kosten: Effektaufschläge addieren sich gedämpft, höchstens ×2', () => {
+  const c = (fx) => ({ art: 0, kl: 0, a: { kraft: 10, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx });
+  // Verstärker 3,0 → 1 + 0,3·2 = 1,6; Verstärker + Doppelrufer + Elementverstärker → gedeckelt bei 2
+  return kosten(c([])) === 10 && kosten(c([1])) === 16 && kosten(c([1, 2, 3])) === 20;
 });
 test('Monster: 20 je Element plus Silber-Monster, alle Namen eindeutig', () => {
   const namen = new Set(ARTEN.map((a) => a.name));

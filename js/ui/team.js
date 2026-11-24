@@ -1,11 +1,11 @@
 // Team bauen: Plätze aus Grundvorrat + Teamkapazität. [VORSCHLAG 12.3] Team aus der Sammlung.
 import { CONFIG } from '../config.js';
-import { S, karte, teamPlaetze, teamSetzen, teamBauen } from '../state.js';
+import { S, karte, teamPlaetze, teamSetzen, teamBauen, teamSlotWaehlen, teamSlotUmbenennen } from '../state.js';
 import { karteElement } from '../cardview.js';
 import { Sound } from '../audio.js';
 import { staerke, kosten, plaetzeBelegt, plaetzeBringt } from '../rules.js';
 import { h, toast, fmt, ICON } from './dom.js';
-import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder } from './sammlung.js';
+import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips } from './sammlung.js';
 
 // Eigene Filter für den Teambildschirm (gleiche Möglichkeiten wie im Album)
 const T_STANDARD = { ...FILTER_STANDARD, team: 'nicht', sort: 'staerke', ab: true, offen: false };
@@ -75,12 +75,26 @@ export function teamScreen(root, nav) {
     const sum = S.d.team.reduce((x, i) => x + staerke(karte(i).a), 0);
     kopf.innerHTML = '';
     const balken = h('div', { class: 'platz-balken' + (p.ok ? '' : ' voll') }, h('i', { style: { width: Math.min(100, (p.belegt / Math.max(1, p.gesamt)) * 100) + '%' } }));
+    const slots = h('div', { class: 'team-slots' }, S.d.teamSlots.map((sl, n) => h('button', {
+      class: 'team-slot' + (n === S.d.teamSlot ? ' an' : ''),
+      title: n === S.d.teamSlot ? 'Doppelklick zum Umbenennen' : 'Dieses Team aktivieren',
+      ondblclick: () => { if (n !== S.d.teamSlot) return; const name = prompt('Name für dieses Team:', sl.name); if (name != null) { teamSlotUmbenennen(n, name); zeichne(); } },
+      onclick: () => { if (n === S.d.teamSlot) return; teamSlotWaehlen(n); Sound.klick(); neu(); },
+    }, h('b', { text: sl.name }), h('small', { text: `${sl.team.length} Karten` }))));
     kopf.append(
+      slots,
       h('div', { class: 'tk-zeile' },
-        h('h2', { text: 'Team' }),
+        h('h2', { text: S.d.teamSlots[S.d.teamSlot].name }),
         h('span', { html: `Plätze <b>${p.belegt}</b> / ${p.gesamt}` }),
         h('span', { html: `${S.d.team.length} Karten · Stärke gesamt <b>${fmt(sum)}</b>` }),
         h('div', { class: 'tk-knoepfe' },
+          h('button', { class: 'btn', text: 'Umbenennen', onclick: () => { const sl = S.d.teamSlots[S.d.teamSlot]; const name = prompt('Name für dieses Team:', sl.name); if (name != null) { teamSlotUmbenennen(S.d.teamSlot, name); zeichne(); } } }),
+          h('button', { class: 'btn', text: 'Kopieren nach …', onclick: () => {
+            const ziel = prompt(`In welchen Slot kopieren? (1–${S.d.teamSlots.length})`, String(((S.d.teamSlot + 1) % S.d.teamSlots.length) + 1));
+            const n = Number(ziel) - 1;
+            if (!S.d.teamSlots[n] || n === S.d.teamSlot) return;
+            S.d.teamSlots[n].team = S.d.team.slice(); toast(`Kopiert nach „${S.d.teamSlots[n].name}“.`); zeichne();
+          } }),
           h('button', { class: 'btn', text: 'Leeren', onclick: () => { teamSetzen([]); zeichne(); } }),
           h('button', { class: 'btn primaer', text: 'Zur Kampagne', onclick: () => nav('kampagne') }))),
       balken,
@@ -91,6 +105,7 @@ export function teamScreen(root, nav) {
     zeichneKandidaten();
   };
 
+  const chipsNeu = () => { const alt = kandKopf.querySelector('.filter-chips'); const neu = filterChips(filter, T_STANDARD, zeichneKandidaten); if (alt) alt.replaceWith(neu || h('span')); else if (neu) kandKopf.append(neu); };
   const zeichneKandidaten = () => {
     const nurListe = () => { zeichneListe(); bauLeiste.replaceChildren(...bauFelder()); };
     kandKopf.replaceChildren(
@@ -101,7 +116,8 @@ export function teamScreen(root, nav) {
         h('button', { class: 'btn klein' + (filter.offen ? ' an' : ''), text: filterAktiv() ? 'Filter ●' : 'Filter', onclick: () => { filter.offen = !filter.offen; zeichneKandidaten(); } }),
         h('button', { class: 'btn klein', text: 'Zurücksetzen', onclick: () => { Object.assign(filter, { ...T_STANDARD, offen: filter.offen }); zeichneKandidaten(); } }),
         h('span', { class: 'treffer' })),
-      filter.offen ? filterFelder(filter, () => { nurListe(); const k = kandKopf.querySelector('.kand-leiste .btn.an'); if (k) k.textContent = filterAktiv() ? 'Filter ●' : 'Filter'; }, { ohne: ['Team', 'Monster'] }) : null,
+      filter.offen ? filterFelder(filter, () => { nurListe(); chipsNeu(); const k = kandKopf.querySelector('.kand-leiste .btn.an'); if (k) k.textContent = filterAktiv() ? 'Filter ●' : 'Filter'; }, { ohne: ['Team', 'Monster'] }) : '',
+      filterChips(filter, T_STANDARD, zeichneKandidaten) || '',
     );
     nurListe();
   };

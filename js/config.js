@@ -50,16 +50,16 @@ export const CONFIG = {
   // [VORSCHLAG 5.1] Rollen mit Gewichten für die Punkteverteilung. Pro Monsterart fest.
   // min: Mindestpunkte, wenn die Stärke es zulässt (sorgt dafür, dass Angreifer überhaupt angreifen).
   rollen: {
-    angreifer: { name: 'Angreifer', g: { kraft: 6, schutz: 2, groesse: 1, wildheit: 1.5, seltsamkeit: 1, schlagzahl: 2, teamplatz: 1 }, min: { kraft: 1, schlagzahl: 1 } },
-    tank: { name: 'Tank', g: { kraft: 2, schutz: 6, groesse: 3, wildheit: 0.5, seltsamkeit: 0.5, schlagzahl: 1, teamplatz: 0.5 }, min: { schutz: 1, schlagzahl: 1 } },
-    wildling: { name: 'Wildling', g: { kraft: 4, schutz: 1, groesse: 0.5, wildheit: 4, seltsamkeit: 1, schlagzahl: 2, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
-    riese: { name: 'Riese', g: { kraft: 4, schutz: 3, groesse: 4, wildheit: 1, seltsamkeit: 0.3, schlagzahl: 1, teamplatz: 2 }, min: { kraft: 1, schlagzahl: 1 } },
-    sonderling: { name: 'Sonderling', g: { kraft: 3, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 5, schlagzahl: 1, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
-    wirbler: { name: 'Wirbler', g: { kraft: 4, schutz: 1, groesse: 0.5, wildheit: 2, seltsamkeit: 1, schlagzahl: 4, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
-    koloss: { name: 'Koloss', g: { kraft: 5, schutz: 2, groesse: 2, wildheit: 1, seltsamkeit: 0.5, schlagzahl: 1, teamplatz: 4 }, min: { kraft: 1, schlagzahl: 1 } },
-    heiler: { name: 'Heiler', g: { kraft: 2, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 1, schlagzahl: 1, teamplatz: 0.5, heilung: 5 }, min: { heilung: 1 } }, // [Nutzer, 21.11.2026]
+    angreifer: { name: 'Angreifer', schlagMax: 2, g: { kraft: 6, schutz: 2, groesse: 1, wildheit: 1.5, seltsamkeit: 1, schlagzahl: 2, teamplatz: 1 }, min: { kraft: 1, schlagzahl: 1 } },
+    tank: { name: 'Tank', schlagMax: 1, g: { kraft: 2, schutz: 6, groesse: 3, wildheit: 0.5, seltsamkeit: 0.5, schlagzahl: 1, teamplatz: 0.5 }, min: { schutz: 1, schlagzahl: 1 } },
+    wildling: { name: 'Wildling', schlagMax: 2, g: { kraft: 4, schutz: 1, groesse: 0.5, wildheit: 4, seltsamkeit: 1, schlagzahl: 2, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
+    riese: { name: 'Riese', schlagMax: 1, g: { kraft: 4, schutz: 3, groesse: 4, wildheit: 1, seltsamkeit: 0.3, schlagzahl: 1, teamplatz: 2 }, min: { kraft: 1, schlagzahl: 1 } },
+    sonderling: { name: 'Sonderling', schlagMax: 2, g: { kraft: 3, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 5, schlagzahl: 1, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
+    wirbler: { name: 'Wirbler', schlagMax: 4, g: { kraft: 4, schutz: 1, groesse: 0.5, wildheit: 2, seltsamkeit: 1, schlagzahl: 4, teamplatz: 0.5 }, min: { kraft: 1, schlagzahl: 1 } },
+    koloss: { name: 'Koloss', schlagMax: 1, g: { kraft: 5, schutz: 2, groesse: 2, wildheit: 1, seltsamkeit: 0.5, schlagzahl: 1, teamplatz: 4 }, min: { kraft: 1, schlagzahl: 1 } },
+    heiler: { name: 'Heiler', schlagMax: 1, g: { kraft: 2, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 1, schlagzahl: 1, teamplatz: 0.5, heilung: 5 }, min: { heilung: 1 } }, // [Nutzer, 21.11.2026]
     // [FEST] Teamkapazität ist optional, nur diese Rolle trägt sie ([OFFEN] welche Karten sie haben, Platzhalter).
-    kommandant: { name: 'Kommandant', g: { kraft: 2, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 1, schlagzahl: 1, teamplatz: 0.5, kapazitaet: 5 }, min: { kapazitaet: 1 } },
+    kommandant: { name: 'Kommandant', schlagMax: 1, g: { kraft: 2, schutz: 2, groesse: 1, wildheit: 1, seltsamkeit: 1, schlagzahl: 1, teamplatz: 0.5, kapazitaet: 5 }, min: { kapazitaet: 1 } },
   },
 
   holo: { reverse: 0.01, holo: 0.005, secret: 0.001, ghost: 0.0002 }, // [FEST] Chance pro Karte, schließen sich aus. Ghost Rare [Nutzer, 21.11.2026]: neue, seltenste Holo-Stufe
@@ -102,6 +102,7 @@ export const CONFIG = {
     sparenOhneGrenze: true, // [FEST]
     spielerLeben: 5, // [FEST]
     teamGrundplaetze: 10, // [VORSCHLAG]
+    teamSlots: 5, // gespeicherte Teams [Spielerfeedback 24.11.2026]
     // Kostenkurve für automatische Teams (aus der Balance-Simulation): je Kostenstufe so viele Karten zuerst
     teamKurve: [{ bis: 10, anzahl: 2 }, { bis: 20, anzahl: 2 }, { bis: 35, anzahl: 3 }, { bis: 50, anzahl: 3 }],
     // [OFFEN] Teamplatz: wie der Multiplikator entsteht. Platzhalter: 1 + 0,2 je Punkt, belegt max(1, Teamplatz) Plätze.
@@ -109,6 +110,8 @@ export const CONFIG = {
     teamplatzMinPlaetze: 1,
     // [OFFEN] Rundung der Beschwörungskosten. Platzhalter: kaufmännisch, mindestens 1.
     kostenRundung: 'round',
+    // Preisaufschlag für Spezialeffekte: 1 + Dämpfung × Summe(Faktor − 1), höchstens Deckel [Spielerfeedback 24.11.2026]
+    effektPreis: { daempfung: 0.3, deckel: 2 },
     rundenLimit: 80, // [OFFEN] Platzhalter gegen Endlos-Patts
     // [ANNAHME 5.4] Teamplatz-Multiplikator wirkt auf den Schaden ([OFFEN], Platzhalter).
     effektStart: 'naechsterZug', // [FEST] außer Blitz

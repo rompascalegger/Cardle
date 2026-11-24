@@ -11,7 +11,9 @@ export function verteilePunkte(rng, summe, rolle) {
   const cap = CONFIG.obergrenzen;
   const a = leereAttribute();
   const keys = ATTR_KEYS.filter((k) => (R.g[k] || 0) > 0);
-  const maxSumme = keys.reduce((s, k) => s + cap[k], 0);
+  // Schlagzahl folgt der Rolle (Spielerfeedback: "Schlagzahl ist irgendwie random"): nur Wirbler schlagen oft zu
+  const capVon = (k) => (k === 'schlagzahl' ? Math.min(cap[k], R.schlagMax ?? cap[k]) : cap[k]);
+  const maxSumme = keys.reduce((s, k) => s + capVon(k), 0);
   let rest = Math.min(summe, maxSumme); // Deckel, falls die Klasse mehr verlangt als die Obergrenzen zulassen
   // Mindestpunkte, wenn genug da ist
   const mins = Object.entries(R.min || {});
@@ -20,7 +22,7 @@ export function verteilePunkte(rng, summe, rolle) {
     for (const [k, v] of mins) { a[k] += v; rest -= v; }
   }
   while (rest > 0) {
-    const frei = keys.filter((k) => a[k] < cap[k]);
+    const frei = keys.filter((k) => a[k] < capVon(k));
     if (!frei.length) break;
     const k = rng.weighted(frei.map((k) => [k, R.g[k]]));
     a[k]++; rest--;

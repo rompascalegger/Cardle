@@ -85,8 +85,14 @@ export function seltenheitsChancen() {
 // ---------- Stärke, Kosten, Teamplätze ----------
 export const staerke = (a) => ATTR_KEYS.reduce((s, k) => s + (a[k] || 0), 0);
 export const hatEffekt = (c, key) => c.fx.some((id) => EFFEKT[id].key === key);
-export function preisFaktor(c) { return c.fx.reduce((p, id) => p * EFFEKT[id].faktor, 1); }
-// [ANNAHME 9.6] Kosten = Stärke × Produkt der Preisfaktoren. [OFFEN] Rundung → Platzhalter.
+// [ANNAHME 9.6, geändert 24.11.2026 nach Spielerfeedback] Früher: Produkt der Preisfaktoren (3 Effekte bis ×24, Karten mit 288 Kosten).
+// Jetzt: Aufschläge addieren sich und werden gedämpft, mit Deckel. Ein Effekt ×1,15–×1,9, höchstens ×2.
+export function preisFaktor(c) {
+  const P = CONFIG.kampf.effektPreis;
+  const aufschlag = c.fx.reduce((s, id) => s + (EFFEKT[id].faktor - 1), 0);
+  return Math.min(P.deckel, 1 + P.daempfung * aufschlag);
+}
+// Kosten = Stärke × Preisfaktor. [OFFEN] Rundung → Platzhalter.
 export function kosten(c) {
   const roh = staerke(c.a) * preisFaktor(c);
   const r = CONFIG.kampf.kostenRundung === 'ceil' ? Math.ceil(roh) : Math.round(roh);

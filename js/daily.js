@@ -21,14 +21,16 @@ export function msBisMorgen(d = new Date()) {
 const GEGNER_ARTEN = ARTEN.filter((a) => !a.silber);
 const FX = EFFEKTE.filter((e) => !['platzspender', 'platzfresser', 'rudelruf', 'sammelrabatt', 'schwergewicht', 'blitzruf', 'erinnerung', 'beutezug', 'opferaltar', 'zweitesich'].includes(e.key)).map((e) => e.id);
 
-export function dailyKampf(kl, datum = heute()) {
+// eigene: Zahl der eigenen Karten dieser Klasse. Der Gegner hat höchstens eine Karte mehr (Spielerfeedback 24.11.2026:
+// hohe Klassen waren kaum zu schaffen, weil man dort nur wenige Karten besitzt).
+export function dailyKampf(kl, datum = heute(), eigene = null) {
   const r = new Rng(`daily-${datum}-${kl}`);
   const els = [Math.floor(r.next() * N), Math.floor(r.next() * N), Math.floor(r.next() * N)];
   const Kl = KLASSEN[kl];
   return {
     id: `daily-${datum}-${kl}`, daily: true, kl, datum, name: `Daily ${Kl.name} Challenge`,
     leben: CONFIG.kampf.spielerLeben, els, dim: els[0], welt: 1 + (kl % 8), stufe: 1, boss: kl >= 6,
-    einkommen: 10 + kl * 2, startBank: kl * 5, anzahl: 6 + Math.floor(kl / 2),
+    einkommen: 10 + Math.floor(kl / 3), startBank: kl, anzahl: Math.max(1, Math.min(6 + Math.floor(kl / 2), eigene == null ? 99 : eigene + 1)),
   };
 }
 
@@ -42,11 +44,11 @@ export function dailyGegner(k) {
     const el = k.els[Math.floor(r.next() * k.els.length)];
     const pool = GEGNER_ARTEN.filter((a) => a.el === el);
     const art = pool[Math.floor(r.next() * pool.length)];
-    const fxAnzahl = n === 0 && k.kl >= 6 ? 2 : r.next() < 0.08 + k.kl * 0.06 ? 1 : 0;
+    const fxAnzahl = n === 0 && k.kl >= 6 ? 1 : r.next() < 0.05 + k.kl * 0.03 ? 1 : 0;
     const fx = [];
     const p = FX.slice();
     for (let i = 0; i < fxAnzahl; i++) fx.push(p.splice(Math.floor(r.next() * p.length), 1)[0]);
-    const ziel = Math.round(Kl.min + (Kl.max - Kl.min) * (0.55 + r.next() * 0.45));
+    const ziel = Math.round(Kl.min + (Kl.max - Kl.min) * (0.3 + r.next() * 0.5));
     const c = gegnerKarte(r, art.id, ziel, fx, k.kl);
     while (plaetzeBelegt(c) > frei + plaetzeBringt(c) && c.a.teamplatz > 0) c.a.teamplatz--;
     if (plaetzeBelegt(c) > frei + plaetzeBringt(c)) break;

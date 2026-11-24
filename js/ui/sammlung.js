@@ -1,7 +1,7 @@
 // Album: Stapel je Monster oder alle Einzelkarten, mit Filtern und Sortierung für jede Eigenschaft.
 // Ausführungen (Holo × Looks) [FEST 11], Looks ab- und auftragen mit Staub, doppelte schwache Karten verkaufen.
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, HOLO_STUFEN } from '../config.js';
-import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon } from '../state.js';
+import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { ELEMENTE, glyphSVG, farbe } from '../elements.js';
 import { ATTRIBUTE } from '../attributes.js';
@@ -14,7 +14,7 @@ import { karteVergroessern } from './lupe.js';
 
 const STANDARD = {
   ansicht: 'monster', suche: '', el: -1, klMin: 0, klMax: 7, stufeMin: 1, holo: 'alle', look: 'alle', fx: 'alle',
-  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, team: 'alle', besitz: 'alle',
+  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, fav: 'alle', team: 'alle', besitz: 'alle',
   sort: 'nr', ab: false, seite: 0, offen: false,
 };
 const F = { ...STANDARD };
@@ -45,9 +45,10 @@ function ausfKurz(holo, looks) {
 // Alle Karten einmal entschlüsseln (für Filter und Sortierung)
 export function datenLaden() {
   const team = new Set(S.d.team);
+  const fav = new Set(S.d.favoriten);
   return S.karten.map((code, i) => {
     const c = dekodiere(code);
-    return { i, c, art: ARTEN[c.art], st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), ak: ausfuehrungsKey(c) };
+    return { i, c, art: ARTEN[c.art], st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: ausfuehrungsKey(c) };
   });
 }
 
@@ -74,9 +75,11 @@ export function passt(x, F = ALBUM_F) {
   if (F.kostenMax > 0 && x.kost > F.kostenMax) return false;
   if (F.team === 'im' && !x.team) return false;
   if (F.team === 'nicht' && x.team) return false;
+  if (F.fav === 'nur' && !x.fav) return false;
+  if (F.fav === 'ohne' && x.fav) return false;
   return true;
 }
-const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team'].some((k) => F[k] !== STANDARD[k]);
+const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team', 'fav'].some((k) => F[k] !== STANDARD[k]);
 
 export const SORTEN = [
   ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
@@ -125,6 +128,33 @@ export function sicherVerkaufen(indizes, weiter) {
   setTimeout(() => eingabe.focus(), 50);
 }
 
+// Übersicht der aktiven Filter als Chips, jeder mit × zum Entfernen [Spielerfeedback 24.11.2026]
+export function filterChips(F, standard, neu) {
+  const name = (liste, v) => (liste.find(([k]) => String(k) === String(v)) || [, v])[1];
+  const holo = [['keins', 'ohne Holo'], ['irgendein', 'mit Holo'], ['reverse', 'Reverse Holo'], ['holo', 'Holo'], ['secret', 'Secret Holo'], ['ghost', 'Ghost Rare']];
+  const chips = [];
+  const chip = (text, ...keys) => chips.push(h('button', { class: 'filter-chip', title: 'Filter entfernen', onclick: () => { for (const k of keys) F[k] = standard[k]; F.seite = 0; neu(); } }, h('span', { text }), h('b', { text: '×' })));
+  if (F.suche) chip(`Name: „${F.suche}“`, 'suche');
+  if (F.el !== standard.el) chip(`Element: ${ELEMENTE[F.el].name}`, 'el');
+  if (F.klMin !== standard.klMin || F.klMax !== standard.klMax) chip(F.klMin === F.klMax ? `Klasse: ${KLASSEN[F.klMin].name}` : `Klasse: ${KLASSEN[F.klMin].name}–${KLASSEN[F.klMax].name}`, 'klMin', 'klMax');
+  if (F.stufeMin !== standard.stufeMin) chip(`Seltenheit ab ${CONFIG.seltenheit.namen[F.stufeMin - 1]}`, 'stufeMin');
+  if (F.holo !== standard.holo) chip(name(holo, F.holo), 'holo');
+  if (F.look !== standard.look) chip(F.look === 'keiner' ? 'ohne Look' : F.look === 'irgendein' ? 'mit Look' : `Look: ${LOOKS[Number(F.look)].name}`, 'look');
+  if (F.fx !== standard.fx) chip(F.fx === 'ohne' ? 'ohne Effekt' : F.fx === 'mit' ? 'mit Effekt' : `Effekt: ${EFFEKTE.find((e) => String(e.id) === F.fx)?.name}`, 'fx');
+  if (F.rolle !== standard.rolle) chip(`Rolle: ${CONFIG.rollen[F.rolle]?.name}`, 'rolle');
+  if (F.bauplan !== standard.bauplan) chip(`Bauplan: ${F.bauplan[0].toUpperCase() + F.bauplan.slice(1)}`, 'bauplan');
+  if (F.form !== standard.form) chip(`Entwicklung: ${FORMEN[F.form]}`, 'form');
+  if (F.attrMin !== standard.attrMin) chip(`${ATTRIBUTE.find((a) => a.key === F.attr)?.name} ≥ ${F.attrMin}`, 'attrMin');
+  if (F.staerkeMin !== standard.staerkeMin) chip(`Stärke ≥ ${F.staerkeMin}`, 'staerkeMin');
+  if (F.kostenMax !== standard.kostenMax) chip(`Kosten ≤ ${F.kostenMax}`, 'kostenMax');
+  if (F.fav !== standard.fav) chip(F.fav === 'nur' ? '★ nur Favoriten' : 'ohne Favoriten', 'fav');
+  if (F.team !== standard.team) chip(F.team === 'im' ? 'im Team' : 'nicht im Team', 'team');
+  if (F.besitz !== standard.besitz) chip(F.besitz === 'entdeckt' ? 'nur entdeckte' : 'nur fehlende', 'besitz');
+  if (!chips.length) return null;
+  return h('div', { class: 'filter-chips' }, h('span', { class: 'leise', text: 'Aktive Filter:' }), ...chips,
+    chips.length > 1 ? h('button', { class: 'filter-chip alle', text: 'Alle entfernen', onclick: () => { for (const k of Object.keys(standard)) if (!['sort', 'ab', 'offen', 'seite', 'ansicht'].includes(k)) F[k] = standard[k]; F.seite = 0; neu(); } }) : null);
+}
+
 // Filterfelder für jede Karteneigenschaft (Album und Team nutzen dieselben). neu() zeichnet die Liste neu.
 export function filterFelder(F, neu, { ohne = [] } = {}) {
   const geaendert = () => { F.seite = 0; neu(); };
@@ -149,6 +179,7 @@ export function filterFelder(F, neu, { ohne = [] } = {}) {
     feld('Attribut mindestens', h('div', { class: 'doppel' }, sel('attr', ATTRIBUTE.map((a) => [a.key, a.name])), zahl('attrMin', 99))),
     feld('Stärke mindestens', zahl('staerkeMin', 200)),
     feld('Kosten höchstens', zahl('kostenMax', 999)),
+    feld('Favoriten', sel('fav', [['alle', 'Alle'], ['nur', '★ nur Favoriten'], ['ohne', 'ohne Favoriten']])),
     feld('Team', sel('team', [['alle', 'Alle'], ['im', 'im Team'], ['nicht', 'nicht im Team']])),
     feld('Monster', sel('besitz', [['alle', 'Alle'], ['entdeckt', 'nur entdeckte'], ['fehlend', 'nur fehlende']])),
   );
@@ -185,13 +216,15 @@ export function sammlungScreen(root) {
         h('button', { class: 'btn klein', text: 'Zurücksetzen', onclick: () => { Object.assign(F, { ...STANDARD, ansicht: F.ansicht, offen: F.offen }); zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein', html: `${ICON.muenze} Doppelte verkaufen …`, onclick: () => verkaufsDialog(neuLaden) }),
         h('span', { class: 'treffer' })),
-      F.offen ? filterBox() : null,
+      F.offen ? filterBox() : '',
+      filterChips(F, STANDARD, () => { zeichneKopf(); zeichneGrid(); }) || '',
     );
   };
-  const filterBox = () => filterFelder(F, zeichneGrid);
+  const chipsNeu = () => { const alt = kopf.querySelector('.filter-chips'); const neu = filterChips(F, STANDARD, () => { zeichneKopf(); zeichneGrid(); }); if (alt) alt.replaceWith(neu || h('span')); else if (neu) kopf.append(neu); };
+  const filterBox = () => filterFelder(F, () => { zeichneGrid(); chipsNeu(); });
 
   const zeichneGrid = () => {
-    const treffer = daten.filter(passt);
+    const treffer = daten.filter((x) => passt(x));
     const richtung = F.ab ? -1 : 1;
     let kacheln, gesamt, text;
     if (F.ansicht === 'karten') {
@@ -262,6 +295,7 @@ export function sammlungScreen(root) {
     const k = h('div', { class: 'sm-kachel' });
     k.append(karteElement(best.c, { animiert: false, nurMaus: true }));
     if (liste.some((x) => x.team)) k.append(h('span', { class: 'team-marke', text: 'TEAM' }));
+    if (liste.some((x) => x.fav)) k.append(h('span', { class: 'fav-marke', text: '★', title: 'Favorit' }));
     k.append(h('div', { class: 'sm-unter', html: `<b>${esc(a.name)}</b><span>×${fmt(liste.length)}${liste.length !== s.anzahl ? ` / ${fmt(s.anzahl)}` : ''}</span><span data-tip="Ausführungen: Kombinationen aus Holo-Stufe und Zusatzlooks">${s.ausf.size}/${AUSF_GESAMT}</span>` }));
     k.append(h('div', { class: 'sm-versionen', html: versionen(a.id) }));
     k.addEventListener('click', () => kartenPopup(a.id, best.i));
@@ -271,6 +305,7 @@ export function sammlungScreen(root) {
     const k = h('div', { class: 'sm-kachel' });
     k.append(karteElement(x.c, { animiert: false, nurMaus: true }));
     if (x.team) k.append(h('span', { class: 'team-marke', text: 'TEAM' }));
+    if (x.fav) k.append(h('span', { class: 'fav-marke', text: '★', title: 'Favorit' }));
     k.append(h('div', { class: 'sm-unter', html: `<b>${esc(x.art.name)}</b><span style="color:${stufenFarbe(x.st)}">${esc(CONFIG.seltenheit.kurz[x.st - 1])}</span><span>${ICON.muenze}${fmt(verkaufswert(x.c))}</span>` }));
     k.addEventListener('click', () => kartenPopup(x.art.id, x.i));
     return k;
@@ -295,8 +330,23 @@ export function sammlungScreen(root) {
       aktionen: [
         { text: 'Alle Karten &amp; Looks', aktion: (c, zu) => { zu(); stapelDetail(artId, neuLaden); } },
         {
+          text: (c) => (xVon(c)?.fav ? '★ Favorit' : '☆ Als Favorit merken'),
+          klasse: 'fav-knopf',
+          aktion: (c, zu, knopf) => {
+            const x = xVon(c);
+            if (!x) return;
+            x.fav = favoritUmschalten(x.i);
+            knopf.textContent = x.fav ? '★ Favorit' : '☆ Als Favorit merken';
+            knopf.classList.toggle('an', x.fav);
+            const vk = knopf.parentElement.querySelector('.verkauf-knopf');
+            if (vk) vk.disabled = x.fav || x.team;
+            zeichneGrid();
+          },
+        },
+        {
           text: (c) => `${ICON.muenze} Verkaufen +${fmt(verkaufswert(c))}`,
-          deaktiviert: (c) => xVon(c)?.team,
+          klasse: 'verkauf-knopf',
+          deaktiviert: (c) => xVon(c)?.team || xVon(c)?.fav,
           aktion: (c, zu, knopf) => {
             const x = xVon(c);
             if (!x || x.team) return;
@@ -397,11 +447,13 @@ export function stapelDetail(artId, nachher) {
       }));
     });
     const imTeam = S.d.team.includes(auswahl);
+    const istFav = S.d.favoriten.includes(auswahl);
+    const favKnopf = h('button', { class: 'btn klein fav-knopf' + (istFav ? ' an' : ''), text: istFav ? '★ Favorit' : '☆ Als Favorit merken', onclick: () => { favoritUmschalten(auswahl); zeichne(); } });
     const verkauf = h('button', {
-      class: 'btn klein', disabled: imTeam, html: imTeam ? 'Im Team, nicht verkaufbar' : `${ICON.muenze} Diese Karte verkaufen +${fmt(verkaufswert(c))}`,
+      class: 'btn klein', disabled: imTeam || istFav, html: imTeam ? 'Im Team, nicht verkaufbar' : istFav ? 'Favorit, nicht verkaufbar' : `${ICON.muenze} Diese Karte verkaufen +${fmt(verkaufswert(c))}`,
       onclick: () => { const ziel = auswahl; sicherVerkaufen([ziel], () => { const r = verkaufen([ziel]); Sound.muenze(); toast(`Verkauft: +${fmt(r.muenzen)} Münzen`); auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); }); },
     });
-    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), verkauf);
+    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), favKnopf, verkauf);
 
     const liste = alle();
     const ausfChips = [...s.ausf.entries()].sort((x, y) => y[0] - x[0]).map(([k, n]) => {

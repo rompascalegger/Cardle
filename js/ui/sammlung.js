@@ -1,7 +1,7 @@
 // Album: Stapel je Monster oder alle Einzelkarten, mit Filtern und Sortierung für jede Eigenschaft.
 // Ausführungen (Holo × Looks) [FEST 11], Looks ab- und auftragen mit Staub, doppelte schwache Karten verkaufen.
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, HOLO_STUFEN } from '../config.js';
-import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald, spitzname, spitznameSetzen, SPITZNAME_MAX, tagVon, tagSetzen, verstaerken, verstaerkenKosten, neuWuerfeln, rerollKosten, ernten, ernteErtrag, STAUB_ARTEN } from '../state.js';
+import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald, spitzname, spitznameSetzen, SPITZNAME_MAX, tagVon, tagSetzen, verstaerken, verstaerkenKosten, neuWuerfeln, rerollKosten, ernten, ernteErtrag, ertragText } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { ELEMENTE, glyphSVG, farbe } from '../elements.js';
 import { ATTRIBUTE } from '../attributes.js';
@@ -177,13 +177,9 @@ export function verbessernBox(i, geaendert, weg) {
     const vk = verstaerkenKosten(i), rk = rerollKosten(i);
     const attrWahl = h('select', {}, ATTRIBUTE.map((at) => h('option', { value: at.key, text: `${at.name} (${c.a[at.key] || 0})`, selected: at.key === (VB.attr || 'kraft') })));
     attrWahl.addEventListener('change', () => { VB.attr = attrWahl.value; });
-    const staubWahl = h('select', {}, Object.entries(STAUB_ARTEN).map(([k, n]) => h('option', { value: k, text: n, selected: k === (VB.ernte || 'kampfstaub') })));
-    const ernteText = () => { const e = ernteErtrag(i, staubWahl.value); return `Ernten: +${fmt(e.menge)} ${STAUB_ARTEN[e.art]}${e.looks.length ? ` + ${e.looks.map((l) => `${l.menge} ${l.name}`).join(', ')}` : ''}`; };
-    const ernteKnopf = h('button', { class: 'btn klein gefahr', disabled: imTeam, text: imTeam ? 'Im Team, nicht erntbar' : ernteText() });
-    staubWahl.addEventListener('change', () => { VB.ernte = staubWahl.value; if (!imTeam) ernteKnopf.textContent = ernteText(); });
+    const ernteKnopf = h('button', { class: 'btn klein gefahr', disabled: imTeam, text: imTeam ? 'Im Team, nicht erntbar' : `🌾 Ernten: ${ertragText(ernteErtrag(i))}` });
     ernteKnopf.addEventListener('click', () => {
-      const art = staubWahl.value;
-      sicherErnten([i], () => { const r = ernten([i], art); if (!r) return; Sound.muenze(); toast(`Geerntet: +${fmt(r.menge)} ${STAUB_ARTEN[r.art]}`); weg && weg(); });
+      sicherErnten([i], () => { const r = ernten([i]); if (!r) return; Sound.muenze(); toast(`Geerntet: +${fmt(r.kampfstaub)} Kampfstaub, +${fmt(r.gluecksstaub)} Glücksstaub`); weg && weg(); });
     });
     box.replaceChildren(
       h('h4', { html: `Verbessern <small class="leise">⚔ ${fmt(S.d.kampfstaub || 0)} Kampfstaub · 🎲 ${fmt(S.d.gluecksstaub || 0)} Glücksstaub</small>` }),
@@ -198,8 +194,8 @@ export function verbessernBox(i, geaendert, weg) {
           toast(`${auf ? `<b>Aufstieg: ${KLASSEN[r.vorher.kl].name} → ${KLASSEN[r.nachher.kl].name}!</b> ` : ''}Stärke ${r.vorher.staerke} → ${r.nachher.staerke}${r.neuerEffekt ? ` · <b>neuer Effekt: ${esc(EFFEKTE.find((e) => e.id === r.neuerEffekt).name)}</b>` : ''}`);
           zeichne(); geaendert && geaendert();
         } })),
-      h('div', { class: 'vb-zeile' }, staubWahl, ernteKnopf),
-      h('p', { class: 'leise klein', text: 'Ernten zerstört die Karte: Klassennummer × Stärke Staub der gewählten Art, dazu Look-Staub für jeden Look.' }));
+      h('div', { class: 'vb-zeile' }, ernteKnopf),
+      h('p', { class: 'leise klein', text: 'Ernten zerstört die Karte: je Klassennummer × Stärke Kampfstaub und Glücksstaub, dazu Look-Staub für jeden Look.' }));
   };
   zeichne();
   return box;
@@ -387,6 +383,7 @@ export function sammlungScreen(root) {
         h('button', { class: 'btn klein' + (F.offen ? ' an' : ''), text: kartenFilterAktiv() || F.el >= 0 ? 'Filter ●' : 'Filter', onclick: () => { F.offen = !F.offen; zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein', text: 'Zurücksetzen', onclick: () => { Object.assign(F, { ...STANDARD, ansicht: F.ansicht, offen: F.offen }); zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein', html: `${ICON.muenze} Doppelte verkaufen …`, onclick: () => verkaufsDialog(neuLaden) }),
+        h('button', { class: 'btn klein ernte-btn', text: '🌾 Doppelte ernten …', onclick: () => ernteDoppelteDialog(neuLaden) }),
         h('span', { class: 'treffer' })),
       F.offen ? filterBox() : '',
       filterChips(F, STANDARD, () => { zeichneKopf(); zeichneGrid(); }) || '',
@@ -541,6 +538,12 @@ export function sammlungScreen(root) {
           },
         },
         {
+          text: '🌾 Ernten',
+          klasse: 'gefahr ernte-knopf',
+          deaktiviert: (c) => xVon(c)?.team,
+          aktion: (c, zu) => { const x = xVon(c); if (!x) return; ernteDialog(x.i, () => { zu(); neuLaden(); }); },
+        },
+        {
           text: (c) => `${ICON.muenze} Verkaufen +${fmt(verkaufswert(c))}`,
           klasse: 'verkauf-knopf',
           deaktiviert: (c) => xVon(c)?.team || xVon(c)?.fav,
@@ -568,6 +571,69 @@ export function sammlungScreen(root) {
 }
 
 // Doppelte, schwache Karten gesammelt verkaufen
+// Einzelne Karte ernten aus der Kartenansicht [Nutzer, 24.11.2026]
+export function ernteDialog(i, nachher) {
+  if (S.d.team.includes(i)) { toast('Karten im Team kann man nicht ernten.'); return; }
+  const c = karte(i);
+  modal({
+    titel: `🌾 ${esc(spitzname(i) || ARTEN[c.art].name)} ernten`,
+    inhalt: h('div', { class: 'ernte-dialog' },
+      h('p', { html: `Du bekommst <b>${esc(ertragText(ernteErtrag(i)))}</b>. Die Karte wird dabei zerstört.` }),
+      h('p', { class: 'leise', text: 'Menge: je Klassennummer × Stärke Kampfstaub und Glücksstaub, dazu Look-Staub für jeden Look der Karte.' })),
+    knoepfe: [{ text: 'Abbrechen' }, { text: '🌾 Ernten', klasse: 'gefahr', aktion: () => {
+      sicherErnten([i], () => { const r = ernten([i]); if (!r) return; Sound.muenze(); toast(`Geerntet: +${fmt(r.kampfstaub)} Kampfstaub, +${fmt(r.gluecksstaub)} Glücksstaub`); nachher && nachher(); });
+    } }],
+  });
+}
+
+// Alle doppelten Karten ernten [Nutzer, 24.11.2026]: Bestätigung durch Eintippen von „Alle doppelten harvesten“
+const ERNTE_SATZ = 'Alle doppelten harvesten';
+function ernteDoppelteDialog(nachher) {
+  const o = { behalten: 1, bisKlasse: 1, nurNormal: true, ohneEffekte: true };
+  const vorschau = h('div', { class: 'verkauf-vorschau' });
+  const eingabe = h('input', { type: 'text', class: 'sicher-eingabe', autocomplete: 'off', spellcheck: false, placeholder: ERNTE_SATZ });
+  let treffer = [];
+  let knopf = null;
+  const bereit = () => treffer.length && eingabe.value.trim().toLowerCase() === ERNTE_SATZ.toLowerCase();
+  const rechne = () => {
+    treffer = doppelteFinden(o);
+    let kampf = 0, glueck = 0;
+    const looks = {};
+    const proKlasse = new Array(KLASSEN.length).fill(0);
+    for (const i of treffer) { const e = ernteErtrag(i); kampf += e.kampfstaub; glueck += e.gluecksstaub; for (const l of e.looks) looks[l.name] = (looks[l.name] || 0) + l.menge; proKlasse[karte(i).kl]++; }
+    vorschau.innerHTML = treffer.length
+      ? `<b>${fmt(treffer.length)}</b> Karten ergeben <b>+${fmt(kampf)} Kampfstaub</b> und <b>+${fmt(glueck)} Glücksstaub</b>${Object.keys(looks).length ? ` und ${Object.entries(looks).map(([n, m]) => `${m} ${esc(n)}`).join(', ')}` : ''}<br><small class="leise">${proKlasse.map((n, k) => (n ? `${KLASSEN[k].name} ${fmt(n)}` : '')).filter(Boolean).join(' · ')}</small>`
+      : 'Keine passenden doppelten Karten.';
+    if (knopf) knopf.disabled = !bereit();
+  };
+  eingabe.addEventListener('input', () => { if (knopf) knopf.disabled = !bereit(); });
+  const zeile = (text, el) => h('label', {}, h('span', { text }), el);
+  const sel = (key, optionen) => h('select', { onchange: (e) => { o[key] = Number(e.target.value); rechne(); } }, optionen.map(([v, t]) => h('option', { value: v, selected: o[key] === v, text: t })));
+  const chk = (key) => h('input', { type: 'checkbox', checked: o[key], onchange: (e) => { o[key] = e.target.checked; rechne(); } });
+  const inhalt = h('div', {},
+    h('p', { class: 'leise', text: 'Je Monster und Ausführung bleiben die stärksten Karten erhalten. Karten im Team und Favoriten werden nie geerntet. Ernten zerstört die Karten.' }),
+    h('div', { class: 'verkauf-optionen' },
+      zeile('Behalten je Ausführung', sel('behalten', [[1, '1 Karte'], [2, '2 Karten'], [3, '3 Karten'], [5, '5 Karten']])),
+      zeile('Nur Klassen bis', sel('bisKlasse', KLASSEN.map((k, i) => [i, k.name]))),
+      zeile('Nur normale Karten (ohne Holo und Looks)', chk('nurNormal')),
+      zeile('Karten mit Effekten behalten', chk('ohneEffekte'))),
+    vorschau,
+    h('p', { html: `Zum Bestätigen tippe <b>${ERNTE_SATZ}</b>:` }), eingabe);
+  const m = modal({
+    titel: '🌾 Doppelte Karten ernten', inhalt,
+    knoepfe: [{ text: 'Abbrechen' }, { text: '🌾 Alle ernten', klasse: 'gefahr', aktion: () => {
+      if (!bereit()) return false;
+      const r = ernten(treffer.slice());
+      if (!r) return;
+      Sound.muenze();
+      toast(`${fmt(r.anzahl)} Karten geerntet: +${fmt(r.kampfstaub)} Kampfstaub, +${fmt(r.gluecksstaub)} Glücksstaub`);
+      nachher && nachher();
+    } }],
+  });
+  knopf = m.box.querySelector('.modal-fuss .gefahr');
+  rechne();
+}
+
 function verkaufsDialog(nachher) {
   const o = { behalten: 1, bisKlasse: 1, nurNormal: true, ohneEffekte: true };
   const vorschau = h('div', { class: 'verkauf-vorschau' });

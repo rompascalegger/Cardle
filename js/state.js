@@ -458,24 +458,28 @@ export function neuWuerfeln(i) {
   baueIndex(); aenderung('sammlung'); speichernBald(300);
   return { preis, vorher, nachher: { kl: c.kl, staerke: staerke(c.a), fx: c.fx.length }, neuerEffekt };
 }
-// Ernten: zerstört die Karte. Gewählte Staubart = Klassennummer × Stärke, dazu Look-Staub für jeden Look.
-export function ernteErtrag(i, art = 'kampfstaub') {
+// Ernten: zerstört die Karte. Ergibt Kampfstaub UND Glücksstaub (je Klassennummer × Stärke) [Nutzer, 24.11.2026],
+// dazu Look-Staub für jeden Look.
+export function ernteErtrag(i) {
   const c = karte(i);
   const looks = LOOKS.map((l, n) => (hatLook(c.looks, n) ? { key: l.key, name: l.staub, menge: staubBeimAbtragen(c) } : null)).filter(Boolean);
-  return { art, menge: (c.kl + 1) * staerke(c.a), looks };
+  const menge = (c.kl + 1) * staerke(c.a);
+  return { kampfstaub: menge, gluecksstaub: menge, looks };
 }
-export function ernten(indizes, art = 'kampfstaub') {
+export const ertragText = (e) => `+${e.kampfstaub.toLocaleString('de-DE')} Kampfstaub, +${e.gluecksstaub.toLocaleString('de-DE')} Glücksstaub${e.looks.length ? `, ${e.looks.map((l) => `+${l.menge} ${l.name}`).join(', ')}` : ''}`;
+export function ernten(indizes) {
   const weg = new Set(indizes.filter((i) => !S.d.team.includes(i)));
-  if (!weg.size || !STAUB_ARTEN[art]) return null;
-  let menge = 0;
+  if (!weg.size) return null;
+  let kampfstaub = 0, gluecksstaub = 0;
   const lookStaub = {};
-  for (const i of weg) { const e = ernteErtrag(i, art); menge += e.menge; for (const l of e.looks) lookStaub[l.key] = (lookStaub[l.key] || 0) + l.menge; }
-  S.d[art] = (S.d[art] || 0) + menge;
+  for (const i of weg) { const e = ernteErtrag(i); kampfstaub += e.kampfstaub; gluecksstaub += e.gluecksstaub; for (const l of e.looks) lookStaub[l.key] = (lookStaub[l.key] || 0) + l.menge; }
+  S.d.kampfstaub = (S.d.kampfstaub || 0) + kampfstaub;
+  S.d.gluecksstaub = (S.d.gluecksstaub || 0) + gluecksstaub;
   for (const k in lookStaub) S.d.staub[k] += lookStaub[k];
   entferneKarten(weg);
   S.d.stat.geerntet = (S.d.stat.geerntet || 0) + weg.size;
   aenderung('sammlung'); speichernBald(300);
-  return { anzahl: weg.size, art, menge, lookStaub };
+  return { anzahl: weg.size, kampfstaub, gluecksstaub, lookStaub };
 }
 
 // Doppelte, schwache Karten finden: je Monster und Ausführung bleiben die stärksten `behalten` Karten.

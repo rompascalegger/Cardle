@@ -901,3 +901,18 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 /* Stern auf Kacheln: aus dem Kartenbild heraus an die Ecke, damit der Name lesbar bleibt */
 .sm-kachel .fav-toggle { top: -10px; left: -10px; width: 28px; height: 28px; }
 .karten-zeile.leer > .leise { grid-column: span 7; }
+
+/* Effekt-Lexikon in den Erfolgen [Nutzer, 24.11.2026] */
+.lexikon-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; margin-top: 8px; }
+.lexikon-eintrag { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; background: var(--panel2); border-left: 4px solid var(--fxc, var(--rand)); }
+.lexikon-eintrag.zu { opacity: .5; border-left-color: var(--rand); }
+.lexikon-eintrag b { color: var(--fxc, var(--text)); }
+.lexikon-eintrag small { display: block; color: var(--leise); }
+.lx-icon { font-size: 1.2rem; color: var(--fxc, var(--leise)); text-align: center; }
+.lx-text { font-size: .85rem; margin-top: 3px; line-height: 1.35; }
+.lx-text i { font-style: normal; font-weight: 800; color: var(--fxc); }
+.lx-stufen { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lx-stufe { font-size: .68rem; font-weight: 800; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--fxc); color: var(--fxc); opacity: .35; }
+.lx-stufe.hat { opacity: 1; background: color-mix(in srgb, var(--fxc) 18%, transparent); }
+.lx-besitz { text-align: right; }
+.lx-besitz b { font-size: 1.1rem; color: var(--text); }

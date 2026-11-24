@@ -159,6 +159,9 @@ export async function laden() {
   if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 1000000; }
   baueIndex();
   S.d.team = (S.d.team || []).filter((i) => i < S.karten.length);
+  // Entdeckte Effekte: aus der Sammlung nachtragen (für Spielstände von vor dieser Liste)
+  S.d.effekteEntdeckt = S.d.effekteEntdeckt || {};
+  for (const code of S.karten) effekteMerken(dekodiere(code));
   S.d.favoriten = (S.d.favoriten || []).filter((i) => i < S.karten.length);
   if (!Array.isArray(S.d.teamSlots)) S.d.teamSlots = [];
   while (S.d.teamSlots.length < CONFIG.kampf.teamSlots) S.d.teamSlots.push({ name: `Team ${S.d.teamSlots.length + 1}`, team: [] });
@@ -296,6 +299,7 @@ export function packOeffnen({ quelle = 'vorrat', sonderIndex = null } = {}) {
     const i = S.karten.length;
     S.karten.push(kodiere(c));
     indexiere(i, c);
+    effekteMerken(c);
     const stufe = kartenSeltenheit(c);
     S.d.stat.stufen[stufe]++;
     S.d.stat.klassen[c.kl]++;
@@ -472,6 +476,14 @@ export function teamWaehlen({ kandidaten = null, strategie = 'kurve', behalten =
   return team;
 }
 export const teamAutomatisch = () => teamBauen();
+
+// ---------- Entdeckte Effekte [Nutzer, 24.11.2026] ----------
+// effekteEntdeckt[id] = Bitmaske der gefundenen Seltenheiten (Bit 0 = Stufe 1 … Bit 4 = Stufe 5). Bleibt auch nach dem Verkauf.
+export function effekteMerken(c) {
+  if (!c.fx?.length) return;
+  const m = (S.d.effekteEntdeckt = S.d.effekteEntdeckt || {});
+  c.fx.forEach((id, i) => { m[id] = (m[id] || 0) | (1 << ((c.fxs?.[i] || 1) - 1)); });
+}
 
 // ---------- Teamslots und Favoriten [Spielerfeedback 24.11.2026] ----------
 export function teamSlotWaehlen(n) {

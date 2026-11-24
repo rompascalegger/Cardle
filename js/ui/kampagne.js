@@ -4,11 +4,11 @@ import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, team
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
 import { attrIcon } from '../attributes.js';
-import { EFFEKT_BY_KEY, effektText } from '../effects.js';
+import { EFFEKT_BY_KEY, effektText, PACK_EFFEKTE } from '../effects.js';
 import { monsterBild } from '../monsterart.js';
 import { Sound } from '../audio.js';
 import { Rng } from '../rng.js';
-import { staerke } from '../rules.js';
+import { staerke, dekodiere } from '../rules.js';
 import { DIMENSIONEN, KERN_DIM, TIEF_DIM, istKern, tiefOffen, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
 import { dailyKampf, dailyGegner, dailyTeam, dailyTeamWaehlen, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
 import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
@@ -245,9 +245,55 @@ export function erfolgeScreen(root, nav) {
     box.append(liste);
     wrap.append(box);
   }
+  wrap.append(effektLexikon());
   };
   erfolgeInhalt();
   return {};
+}
+
+// Effekt-Lexikon [Nutzer, 24.11.2026]: alle entdeckten Effekte mit Seltenheit und Beschreibung, Unentdeckte verdeckt
+const lexikonF = { suche: '', zeige: 'alle' };
+function effektLexikon() {
+  const ES = CONFIG.effektStufen;
+  const entdeckt = S.d.effekteEntdeckt || {};
+  // Anzahl je Effekt in der aktuellen Sammlung
+  const besitz = {};
+  for (const code of S.karten) { const c = dekodiere(code); for (const id of c.fx) besitz[id] = (besitz[id] || 0) + 1; }
+  // Entdeckte zuerst, danach die noch verdeckten
+  const alle = [...PACK_EFFEKTE].sort((a, b) => !!entdeckt[b.id] - !!entdeckt[a.id] || a.id - b.id);
+  const gefunden = alle.filter((e) => entdeckt[e.id]).length;
+  const stufenGesamt = alle.reduce((n, e) => n + (e.skaliert ? 5 : 1), 0);
+  const stufenGefunden = alle.reduce((n, e) => n + [0, 1, 2, 3, 4].filter((i) => (entdeckt[e.id] || 0) & (1 << i)).length, 0);
+  const liste = h('div', { class: 'lexikon-liste' });
+  const zeichne = () => {
+    const q = lexikonF.suche.trim().toLowerCase();
+    const zeilen = alle.filter((e) => {
+      const hat = !!entdeckt[e.id];
+      if (lexikonF.zeige === 'entdeckt' && !hat) return false;
+      if (lexikonF.zeige === 'offen' && hat) return false;
+      if (lexikonF.zeige === 'neu' && !e.skaliert) return false;
+      return !q || (hat && `${e.name} ${e.wirkung}`.toLowerCase().includes(q));
+    }).map((e) => {
+      const m = entdeckt[e.id] || 0;
+      if (!m) return h('div', { class: 'lexikon-eintrag zu', html: `<span class="lx-icon">?</span><div><b>???</b><small>Noch nicht entdeckt${e.skaliert ? ' · skaliert mit Seltenheit 1–5' : ''}</small></div>` });
+      const stufen = e.skaliert ? [1, 2, 3, 4, 5] : [1];
+      const chips = stufen.map((st) => { const hat = m & (1 << (st - 1)); return `<span class="lx-stufe${hat ? ' hat' : ''}" style="--fxc:${ES.farben[st - 1]}" title="${ES.namen[st - 1]}${hat ? ' (entdeckt)' : ' (noch nicht entdeckt)'}: ${esc(effektText(e.id, st))}">${hat ? ES.namen[st - 1] : '?'}</span>`; }).join('');
+      const hoechste = [5, 4, 3, 2, 1].find((st) => m & (1 << (st - 1))) || 1;
+      const texte = e.skaliert
+        ? stufen.filter((st) => m & (1 << (st - 1))).map((st) => `<div class="lx-text" style="--fxc:${ES.farben[st - 1]}"><i>${ES.namen[st - 1]} (+${st}):</i> ${esc(effektText(e.id, st))}</div>`).join('')
+        : `<div class="lx-text">${esc(e.wirkung)}</div>`;
+      return h('div', { class: 'lexikon-eintrag', style: `--fxc:${ES.farben[hoechste - 1]}`, html: `<span class="lx-icon">${e.blitz ? '⚡' : '✦'}</span><div><b>${esc(e.name)}</b>${texte}<div class="lx-stufen">${chips}</div></div><div class="lx-besitz"><b>${fmt(besitz[e.id] || 0)}</b><small>in der Sammlung</small></div>` });
+    });
+    liste.replaceChildren(...(zeilen.length ? zeilen : [h('p', { class: 'leise', text: 'Keine Effekte passen.' })]));
+  };
+  const suche = h('input', { type: 'search', class: 'such-feld', placeholder: 'Effekt suchen …', value: lexikonF.suche });
+  suche.addEventListener('input', () => { lexikonF.suche = suche.value; zeichne(); });
+  const wahl = h('select', { onchange: (e) => { lexikonF.zeige = e.target.value; zeichne(); } }, [['alle', 'Alle'], ['entdeckt', 'Nur entdeckte'], ['offen', 'Nur unentdeckte'], ['neu', 'Nur skalierende (Seltenheit 1–5)']].map(([v, t]) => h('option', { value: v, selected: lexikonF.zeige === v, text: t })));
+  zeichne();
+  return h('div', { class: 'panel erfolg-gruppe lexikon' },
+    h('div', { class: 'kand-leiste' }, h('h3', { text: 'Entdeckte Effekte' }), h('span', { class: 'leise', html: `<b>${gefunden}</b> / ${alle.length} Effekte · <b>${stufenGefunden}</b> / ${stufenGesamt} Seltenheiten` }), suche, wahl),
+    h('p', { class: 'leise', html: `Seltenheiten: ${ES.namen.map((n, i) => `<b style="color:${ES.farben[i]}">${n}</b>`).join(' · ')}. Klassische Effekte gibt es nur als ${ES.namen[0]}, die neuen skalieren bis ${ES.namen[4]}. Einmal gefunden bleibt ein Effekt entdeckt, auch wenn du die Karte verkaufst.` }),
+    liste);
 }
 
 // Erfolge melden (Toast mit Fanfare)

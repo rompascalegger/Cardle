@@ -47,7 +47,8 @@ export function dailyGegner(k) {
     const fx = [];
     const p = FX.slice();
     for (let i = 0; i < fxAnzahl; i++) fx.push(p.splice(Math.floor(r.next() * p.length), 1)[0]);
-    const ziel = Math.round(Kl.min + (Kl.max - Kl.min) * (0.3 + r.next() * 0.5));
+    const kMax = Number.isFinite(Kl.max) ? Kl.max : Kl.min + 60; // Brilliant ohne Deckel
+    const ziel = Math.round(Kl.min + (kMax - Kl.min) * (0.3 + r.next() * 0.5));
     const c = gegnerKarte(r, art.id, ziel, fx, k.kl);
     karten.push(c);
   }

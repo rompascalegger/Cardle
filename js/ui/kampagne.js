@@ -1,6 +1,6 @@
 // Kampagne (Welten, Bosse) und Kampfansicht. [FEST 12] automatischer Kampf, Beschwörung, 5 Leben.
 import { CONFIG, KLASSEN } from '../config.js';
-import { S, karte, karteMitName, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
+import { S, karte, karteMitName, kampfKonfig, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
 import { SORTEN, kartenWert, vergleich, fundDaten } from './sammlung.js';
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
@@ -10,13 +10,13 @@ import { monsterBild } from '../monsterart.js';
 import { Sound } from '../audio.js';
 import { Rng } from '../rng.js';
 import { staerke, dekodiere } from '../rules.js';
-import { DIMENSIONEN, KERN_DIM, TIEF_DIM, istKern, tiefOffen, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
+import { DIMENSIONEN, KERN_DIM, TIEF_DIM, istKern, tiefOffen, turmOffen, turmKampf, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
 import { dailyKampf, dailyGegner, dailyTeam, dailyTeamWaehlen, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
 import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
 import { karteVergroessern } from './lupe.js';
 import { ARTEN } from '../species.js';
 import { trivia } from '../trivia.js';
-import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend } from '../battle.js';
+import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend, erreichbareElemente, aktiv, vorschauRunde, faktorKampf } from '../battle.js';
 import { h, modal, toast, warte, anim, ICON, fmt, fmt1, schuetteln, partikel, konfetti } from './dom.js';
 
 // ---------- Weltkarte ----------
@@ -52,6 +52,11 @@ export function kampagneScreen(root, nav) {
       h('div', { class: 'kp-knoepfe' },
         h('button', { class: 'btn', text: 'Team', onclick: () => nav('team') }),
         h('button', { class: 'btn', text: 'Erfolge', onclick: () => nav('erfolge') }),
+        // Ewiger Turm [Nutzer, 24.11.2026]: offen nach dem Tiefen Kern
+        h('button', { class: 'btn turm-btn' + (turmOffen(fort) ? '' : ' zu'), html: turmOffen(fort) ? `♜ Ewiger Turm · Stufe ${(S.d.turm?.stufe || 0) + 1}` : '🔒 Ewiger Turm', onclick: () => {
+          if (!turmOffen(fort)) { toast('Der Ewige Turm öffnet sich, wenn du alle 16 Welten des Tiefen Kerns abgeschlossen hast.'); return; }
+          vorschau(turmKampf(Math.min(CONFIG.turm.stufen, (S.d.turm?.stufe || 0) + 1)), nav);
+        } }),
         naechster ? h('button', { class: 'btn primaer', html: `${ICON.schwert} Weiter: ${esc(weltName(naechster.dim, naechster.welt))} · ${esc(naechster.name)}`, onclick: () => vorschau(naechster, nav) }) : null),
     );
   };
@@ -170,27 +175,30 @@ function vorschau(k, nav) {
     ...(daily ? [h('option', { value: -1, selected: aktuell === -1, text: `Automatisch (beste ${KLASSEN[k.kl].name}-Karten)` })] : []),
     ...S.d.teamSlots.map((sl, n) => h('option', { value: n, selected: aktuell === n, text: `${n + 1} · ${sl.name} (${klasseZahl(sl)} ${daily ? KLASSEN[k.kl].name + '-' : ''}Karten)` })),
   ]));
-  const titel = daily ? esc(k.name) : `${esc(weltName(k.dim, k.welt))} · ${esc(k.name)}`;
+  const titel = daily || k.turm ? esc(k.name) : `${esc(weltName(k.dim, k.welt))} · ${esc(k.name)}`;
   const lohn = daily ? dailyBelohnung(k.kl) : belohnung(k, !fort[k.id]);
   const m = modal({
     titel,
     inhalt: h('div', {},
       teamWahl,
       h('div', { class: 'vs-vergleich', html: `
-<div><span>Gegnerteam</span><b>${fmt(ti.staerke)}</b><small>${gegner.length} Karten · Plätze ${ti.belegt}/${ti.gesamt} · ${ICON.herz} ${k.leben}</small><small>${ICON.beschwoerung} ${kw.einkommen} je Zug${kw.startBank ? ` · Vorsprung ${kw.startBank}` : ''}</small></div>
+<div><span>Gegnerteam</span><b>${fmt(ti.staerke)}</b>${k.turm ? `<small class="turm-buff">Stärkebuff ×${buffText(kw.faktor)} (1,1^${k.turm})</small>` : ''}<small>${gegner.length} Karten · Plätze ${ti.belegt}/${ti.gesamt} · ${ICON.herz} ${k.leben}</small><small>${ICON.beschwoerung} ${kw.einkommen} je Zug${kw.startBank ? ` · Vorsprung ${kw.startBank}` : ''}</small></div>
 <div class="vs-sw" style="--sw:${sw.farbe}"><b>${esc(sw.name)}</b></div>
 <div><span>${daily ? `Dein ${KLASSEN[k.kl].name}-Team` : `Team ${S.d.teamSlot + 1} · ${esc(S.d.teamSlots[S.d.teamSlot].name)}`}</span><b>${fmt(eigene)}</b><small>${eigenTeam.length} Karten · ${ICON.herz} ${CONFIG.kampf.spielerLeben}</small><small>${ICON.beschwoerung} ${CONFIG.kampf.beschwoerungProZug} je Zug</small></div>` }),
-      h('p', { class: 'leise', html: `Elemente: ${esc(elementNamen(k.els))} · Belohnung ${ICON.pack} <b>${lohn.packs}</b> Packs, ${ICON.muenze} <b>${fmt(lohn.muenzen)}</b>${lohn.gluecks ? ` · <span class="gluecks-text">★ ${lohn.gluecks} Glückspack</span>` : ''}${lohn.welt ? ' · <span class="gluecks-text">★ Weltbelohnung</span>' : ''} · Karte antippen zum Vergrößern` }),
+      h('p', { class: 'leise', html: `Elemente: ${esc(elementNamen(k.els))} · Belohnung ${ICON.pack} <b>${lohn.packs}</b> Packs, ${ICON.muenze} <b>${fmt(lohn.muenzen)}</b>${lohn.kampfstaub ? `, ⚔ <b>${fmt(lohn.kampfstaub)}</b> Kampfstaub` : ''}${lohn.gluecks ? ` · <span class="gluecks-text">★ ${lohn.gluecks} Glückspack</span>` : ''}${lohn.welt ? ' · <span class="gluecks-text">★ Weltbelohnung</span>' : ''} · Karte antippen zum Vergrößern` }),
       daily ? h('p', { class: 'leise', text: dt.wahl >= 0 ? `Es kämpfen die ${KLASSEN[k.kl].name}-Karten aus Team ${dt.wahl + 1} (${S.d.teamSlots[dt.wahl].name}), höchstens 12.` : `Es kämpfen automatisch deine besten ${KLASSEN[k.kl].name}-Karten.` }) : null,
       grid,
       ok ? null : h('p', { class: 'gold', text: daily ? (dt.wahl >= 0 && dt.verfuegbar ? `In Team ${dt.wahl + 1} sind keine ${KLASSEN[k.kl].name}-Karten. Wähle ein anderes Team oder „Automatisch“.` : `Du hast noch keine ${KLASSEN[k.kl].name}-Karten.`) : 'Stelle zuerst ein gültiges Team auf.' })),
     klasse: 'breit',
     knoepfe: [
       daily ? { text: 'Zurück' } : { text: 'Team bearbeiten', aktion: () => nav('team') },
-      { text: 'Kämpfen', klasse: 'primaer', disabled: !ok, aktion: () => nav('kampf', daily ? { daily: k.kl } : { id: k.id }) },
+      { text: 'Kämpfen', klasse: 'primaer', disabled: !ok, aktion: () => nav('kampf', daily ? { daily: k.kl } : k.turm ? { turm: k.turm } : { id: k.id }) },
     ],
   });
 }
+
+// Großer Stärkebuff lesbar: bis 1 Mio. normal, darüber wissenschaftlich
+const buffText = (f) => (f < 1e6 ? zahl(Math.round(f * 100) / 100) : f.toExponential(2).replace('.', ',').replace('e+', ' · 10^'));
 
 // ---------- Daily Challenges ----------
 export function dailyScreen(root, nav) {
@@ -306,28 +314,32 @@ export function erfolgeMelden(neu) {
 
 // ---------- Kampfansicht ----------
 const TEMPI = [1, 2, 3, 5, 10]; // [Nutzer, 21.11.2026] bis ×10
-export function kampfScreen(root, nav, { id, daily = null }) {
+export function kampfScreen(root, nav, { id, daily = null, turm = null }) {
   const fortschritt = S.d.kampagne.fortschritt;
-  const k = daily != null ? dailyKampf(daily, undefined, dailyTeam(daily).team.length) : kampfNachId(id);
+  const k = daily != null ? dailyKampf(daily, undefined, dailyTeam(daily).team.length) : turm != null ? turmKampf(turm) : kampfNachId(id);
   const eigenTeam = daily != null ? dailyTeam(daily).team : S.d.team;
   if (!k || !eigenTeam.length) { nav(daily != null ? 'daily' : 'kampagne'); return {}; }
   const kw = daily != null ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fortschritt);
   const b = neuerKampf({
-    spielerKarten: eigenTeam.map(karteMitName), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
+    spielerKarten: eigenTeam.map((i) => Object.assign(karteMitName(i), { idx: i })), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
     rng: new Rng(`${S.d.seed}:${k.id}:${S.d.stat.packs}:${S.d.kampagne.siege + S.d.kampagne.niederlagen}`),
-    gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank,
+    gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank, gegnerFaktor: k.turm ? kw.faktor : 1,
   });
+  // Auto-Beschwören je Team gespeichert: gesperrte Karten und Knopf (Standard aus)
+  const konf = kampfKonfig(daily);
+  for (const u of b.seiten[0].hand) u.autoAus = konf.autoAus.includes(u.c.idx);
   const v = { auswahlHand: null, auswahlFeld: null, phase: 'start', tempoI: S.d.einst.kampfTempo || 0, auto: false, laeuft: false, aus: false };
   const wrap = h('section', { class: 'screen kampf' });
   wrap.innerHTML = `
 <div class="kf-seite gegner"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-hand-zahl"></div></div>
 <div class="kf-brett"><div class="kf-spalten"></div><div class="kf-flug"></div></div>
 <div class="kf-mitte"><span class="kf-zug"></span><span class="kf-phase"></span></div>
+<div class="kf-aktion"></div>
 <div class="kf-seite spieler"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-knoepfe"></div></div>
 <div class="kf-hand-leiste"></div>
 <div class="kf-hand"></div>
 <div class="kf-friedhoefe"></div>
-<details class="kf-log"><summary>Kampfprotokoll</summary><div class="kf-log-inhalt"></div></details>`;
+<details class="kf-log"><summary>Kampfprotokoll</summary><div class="kf-log-filter"></div><div class="kf-log-inhalt"></div></details>`;
   root.append(wrap);
   const q = (s) => wrap.querySelector(s);
   const spalten = q('.kf-spalten');
@@ -402,6 +414,14 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     const el = angezeigtesEl(u, 0);
     t.style.setProperty('--el', farbe(el));
     t.querySelector('.eh-siegel').innerHTML = glyphSVG(el) + (u.elZug !== u.el && (u.seite === 0 || u.enthuellt || u.falschEl == null) ? '<i class="versch">↻</i>' : '');
+    // Gewähltes Ziel und Element sichtbar machen
+    if (u.seite === 0) {
+      const ziel = u.zielWahl != null ? findeEinheit(b, u.zielWahl) : null;
+      if (u.zielWahl != null && (!ziel || ziel.tot)) u.zielWahl = null;
+      let m = t.querySelector('.eh-wahl');
+      const txt = [ziel && !ziel.tot ? `🎯 ${ziel.name}` : '', u.verschiebWahl != null ? `↻ ${ELEMENTE[u.verschiebWahl].name}` : ''].filter(Boolean).join(' · ');
+      if (txt) { if (!m) { m = h('div', { class: 'eh-wahl' }); t.append(m); } m.textContent = txt; } else if (m) m.remove();
+    }
     t.querySelector('.eh-siegel').dataset.tip = ELEMENTE[el].name + (u.elZug !== u.el ? ` (verschoben von ${ELEMENTE[u.el].name})` : '');
   };
   const kachelVon = (uid) => spalten.querySelector(`.einheit[data-uid="${uid}"]`);
@@ -422,11 +442,52 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     markiere();
   };
   const markiere = () => {
+    zeichneAktion();
     spalten.querySelectorAll('.slot.s').forEach((s, i) => {
       const leer = !b.seiten[0].feld[i];
       s.classList.toggle('ziel', v.phase === 'spieler' && ((v.auswahlHand != null && leer) || v.auswahlFeld != null));
       s.classList.toggle('gewaehlt', v.auswahlFeld === i);
     });
+  };
+  // Angriff und Verschiebung selbst wählen [Nutzer, 24.11.2026]: eigene Feldkarte antippen, dann hier einstellen
+  const zeichneAktion = () => {
+    const box = q('.kf-aktion');
+    const u = v.auswahlFeld != null ? b.seiten[0].feld[v.auswahlFeld] : null;
+    if (!box) return;
+    if (!u || u.tot || v.phase !== 'spieler' || b.ende) { box.replaceChildren(); return; }
+    const w = werte(b, u);
+    const sp = v.auswahlFeld;
+    const feinde = lebend(b.seiten[1]);
+    const erreichbar = (t) => b.seiten[1].feld.indexOf(t) === sp || aktiv(b, u, 'zielsuche') || (w.wild >= 1 && t.a.groesse <= w.wild);
+    const zielSel = h('select', { onchange: (e) => { u.zielWahl = e.target.value === '' ? null : Number(e.target.value); zeichneBrett(); } },
+      h('option', { value: '', text: 'Automatisch (beste Wahl)', selected: u.zielWahl == null }),
+      ...feinde.map((t) => { const f = faktorKampf(b, u, t, u.elZug, angezeigtesEl(t, 0)).f; return h('option', { value: t.uid, selected: u.zielWahl === t.uid, disabled: !erreichbar(t), text: `${t.name} · Feld ${b.seiten[1].feld.indexOf(t) + 1} · ×${zahl(f)}${erreichbar(t) ? '' : ' (nicht erreichbar)'}` }); }));
+    const optionen = w.selt > 0 ? erreichbareElemente(u.el, w.selt) : [];
+    const elSel = h('select', { disabled: !optionen.length, onchange: (e) => { u.verschiebWahl = e.target.value === '' ? null : Number(e.target.value); } },
+      h('option', { value: '', text: optionen.length ? 'Automatisch (beste Wahl)' : 'keine Seltsamkeit', selected: u.verschiebWahl == null }),
+      ...optionen.map((o) => h('option', { value: o.el, selected: u.verschiebWahl === o.el, text: `${ELEMENTE[o.el].name}${o.kosten ? ` (${o.schritte > 0 ? '+' : ''}${o.schritte}, kostet ${o.kosten})` : ' (bleibt)'}` })));
+    box.replaceChildren(h('div', { class: 'kf-aktion-box' },
+      h('b', { text: u.name }),
+      h('label', {}, h('span', { text: 'Angriff auf' }), zielSel),
+      h('label', {}, h('span', { text: 'Element' }), elSel),
+      h('small', { class: 'leise', text: `Kraft ${zahl(w.kraft)} · ${w.schlag} Schläge · Wildheit ${w.wild}. Erreichbar ist das Gegenüber, mit Wildheit auch Gegner bis Größe ${w.wild}. Weitere Schläge wählen automatisch.` }),
+      h('button', { class: 'btn klein', text: 'Fertig', onclick: () => { v.auswahlFeld = null; zeichneBrett(); markiere(); } })));
+  };
+  // Vorschau: wer greift wen an (Kopie der Runde) [Nutzer, 24.11.2026]
+  const vorschauZeigen = () => {
+    const pv = vorschauRunde(b);
+    const name = (uid) => findeEinheit(pv.b, uid)?.name || '?';
+    const zeilen = { 0: [], 1: [] };
+    for (const e of pv.ev) {
+      if (e.t === 'angriff' && e.von != null) {
+        const z = e.ziel != null ? findeEinheit(pv.b, e.ziel) : null;
+        const text = e.leer ? `${name(e.von)} greift das freie Feld an` : e.kein ? `${name(e.von)}: kein Ziel${e.grund ? ` (${e.grund})` : ''}` : e.ausgewichen ? `${name(e.von)} → ${name(e.ziel)}: weicht aus` : `${name(e.von)} → ${name(e.ziel)}: ${zahl(Math.round(e.schaden * 10) / 10)} Schaden${e.f !== 1 ? ` (×${zahl(Math.round(e.f * 100) / 100)})` : ''}${e.gespiegelt ? ' (gespiegelt)' : ''}${z && z.tot && !e.gespiegelt ? ' ☠' : ''}`;
+        zeilen[e.seite].push(text);
+      }
+      if (e.t === 'leben' && e.delta < 0) zeilen[e.seite === 0 ? 1 : 0].push(`<b>${e.seite === 0 ? 'Du verlierst' : 'Gegner verliert'} ein Leben</b>`);
+    }
+    const liste = (l) => (l.length ? `<ul>${l.map((x) => `<li>${x.startsWith('<b>') ? x : esc(x)}</li>`).join('')}</ul>` : '<p class="leise">keine Angriffe</p>');
+    modal({ titel: `Vorschau: Zug ${b.zug}`, klasse: 'breit', inhalt: h('div', { class: 'kf-vorschau', html: `<p class="leise">So läuft die Runde, wenn du jetzt „Kampf!“ drückst (☠ = wird ausgeschaltet). Ändere Aufstellung, Ziele oder Elemente und schau erneut.</p><div class="kfv-spalten"><div><h4>Deine Angriffe</h4>${liste(zeilen[0])}</div><div><h4>Angriffe des Gegners</h4>${liste(zeilen[1])}</div></div>${pv.ende ? `<p><b>${pv.ende.sieger === 0 ? 'Du gewinnst den Kampf in dieser Runde!' : 'Du verlierst den Kampf in dieser Runde!'}</b></p>` : ''}` }) });
   };
   const herzen = (s) => {
     const seite = b.seiten[s];
@@ -451,7 +512,7 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     for (const [s, cls] of [[0, 'spieler'], [1, 'gegner']]) {
       const seite = b.seiten[s];
       const box = q(`.kf-seite.${cls}`);
-      box.querySelector('.kf-name').textContent = seite.name;
+      box.querySelector('.kf-name').innerHTML = esc(seite.name) + (seite.staerkeFaktor > 1 ? ` <small class="turm-buff" data-tip="Ewiger Turm: Elementarkraft und Leben der Gegner × ${buffText(seite.staerkeFaktor)}">Stärkebuff ×${buffText(seite.staerkeFaktor)}</small>` : '');
       box.querySelector('.kf-leben').innerHTML = herzen(s);
       box.querySelector('.kf-bank').innerHTML = `<span data-tip="Beschwörungspunkte (angespart). Pro Zug +${einkommen(b, s)}">${ICON.beschwoerung}<b>${fmt(seite.bank)}</b><small>+${einkommen(b, s)}</small></span>`;
       // [Nutzer] Stärke im Kampf sichtbar: Leben auf dem Feld und Stärke in der Hand
@@ -466,6 +527,8 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     const knoepfe = q('.kf-knoepfe');
     knoepfe.replaceChildren(
       h('button', { class: 'btn primaer gross', disabled: v.phase !== 'spieler' || v.auto || !!b.ende, html: `${ICON.schwert} Kampf!`, onclick: () => kampfRunde() }),
+      h('button', { class: 'btn', disabled: v.phase !== 'spieler' || !!b.ende, text: '👁 Vorschau', 'data-tip': 'Zeigt, wer wen angreift, wenn du jetzt „Kampf!“ drückst', onclick: () => vorschauZeigen() }),
+      h('button', { class: 'btn' + (konf.autoBeschwoeren ? ' an' : ''), text: konf.autoBeschwoeren ? 'Auto-Beschwören an' : 'Auto-Beschwören', 'data-tip': 'Beschwört zu Beginn jedes Zuges automatisch (nur Karten mit 🤖). Du kämpfst selbst. Wird je Team gespeichert.', onclick: async () => { konf.autoBeschwoeren = !konf.autoBeschwoeren; speichernBald(); zeichneSeiten(); if (konf.autoBeschwoeren) await autoBeschwoeren(); } }),
       h('button', { class: 'btn' + (v.auto ? ' an' : ''), text: v.auto ? 'Auto an' : 'Auto', 'data-tip': 'Beschwört und kämpft automatisch für dich', onclick: () => { v.auto = !v.auto; b.autoSpieler = v.auto; zeichneSeiten(); if (v.auto && v.phase === 'spieler') autoSchritt(); } }),
       h('button', { class: 'btn', text: `${TEMPI[v.tempoI]}×`, 'data-tip': 'Tempo der Animation', onclick: () => { v.tempoI = (v.tempoI + 1) % TEMPI.length; S.d.einst.kampfTempo = v.tempoI; zeichneSeiten(); } }),
       h('button', { class: 'btn leise-btn', text: 'Aufgeben', onclick: () => { if (!b.ende) { b.ende = { sieger: 1, grund: 'aufgegeben' }; ende(); } } }),
@@ -512,6 +575,17 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
       t.classList.toggle('teuer', !leistbar);
       t.classList.toggle('gewaehlt', v.auswahlHand === i);
       t.append(h('div', { class: 'eh-kosten', html: `${ICON.beschwoerung}${k}` }));
+      // 🤖 = darf automatisch beschworen werden (Standard an), Klick schaltet um, gespeichert je Team
+      const robo = h('button', { class: 'eh-auto' + (u.autoAus ? '' : ' an'), title: u.autoAus ? 'Wird nicht automatisch beschworen (klicken zum Erlauben)' : 'Darf automatisch beschworen werden (klicken zum Sperren)', text: '🤖' });
+      robo.addEventListener('pointerdown', (e) => e.stopPropagation());
+      robo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        u.autoAus = !u.autoAus;
+        const idx = u.c.idx;
+        if (idx != null) { konf.autoAus = konf.autoAus.filter((x) => x !== idx); if (u.autoAus) konf.autoAus.push(idx); speichernBald(); }
+        zeichneHand();
+      });
+      t.append(robo);
       t.addEventListener('pointerdown', (e) => ziehStart(e, 'hand', i, t));
       t.addEventListener('click', () => {
         if (v.nachZiehen) return;
@@ -525,7 +599,13 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     }));
     if (!seite.hand.length) hand.append(h('p', { class: 'leise', text: 'Keine Karten mehr in der Hand.' }));
   };
-  const zeichneLog = () => { q('.kf-log-inhalt').innerHTML = b.log.slice(-80).reverse().map((l) => `<div><b>${l.zug}</b> ${esc(l.text)}</div>`).join(''); };
+  // Kampfprotokoll mit Filter [Nutzer, 24.11.2026]: Alle, nur deine Aktionen, nur die des Gegners
+  const zeichneLog = () => {
+    const f = v.logFilter ?? 'alle';
+    q('.kf-log-filter').replaceChildren(...[['alle', 'Alle'], [0, 'Du'], [1, 'Gegner']].map(([w, t]) => h('button', { class: 'btn klein' + (f === w ? ' an' : ''), text: t, onclick: () => { v.logFilter = w; zeichneLog(); } })));
+    const liste = b.log.filter((l) => f === 'alle' || l.seite === f || l.seite == null);
+    q('.kf-log-inhalt').innerHTML = liste.slice(-120).reverse().map((l) => `<div class="${l.seite === 1 ? 'log-gegner' : l.seite === 0 ? 'log-du' : ''}"><b>${l.zug}</b> ${esc(l.text)}</div>`).join('');
+  };
   const zeichneAlles = () => { zeichneBrett(); zeichneSeiten(); zeichneHand(); zeichneLog(); };
 
   // ---- Eingaben ----
@@ -707,6 +787,13 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     zeichneAlles();
     if (b.ende) return ende();
     if (v.auto) autoSchritt();
+    else if (konf.autoBeschwoeren) autoBeschwoeren();
+  };
+  const autoBeschwoeren = async () => {
+    if (v.phase !== 'spieler' || b.ende || v.aus || v.auto) return;
+    kiBeschwoeren(b, 0);
+    await spiele(b.ev.splice(0));
+    zeichneAlles();
   };
   const kampfRunde = async () => {
     if (v.phase !== 'spieler' || b.ende) return;
@@ -746,17 +833,27 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
           sonderPacksGeben({ gluecks: l.gluecks, element: l.element }, k.els[0]);
           text += `<p class="belohnung">${ICON.pack} <b>+${l.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${fmt(l.muenzen)}</b>${l.gluecks ? ' &nbsp; <span class="gluecks-text">★ +1 Glückspack</span>' : ''}${l.element ? ` &nbsp; +1 ${esc(ELEMENTE[k.els[0]].name)}-Elementpack` : ''}</p>`;
         } else text += '<p class="leise">Die Belohnung dieser Challenge hast du heute schon bekommen.</p>';
+      } else if (k.turm) {
+        // Ewiger Turm: nächste Stufe frei, Turmpack ×50
+        const bel = belohnung(k, true);
+        S.d.turm = S.d.turm || { stufe: 0 };
+        const neu = k.turm > S.d.turm.stufe;
+        if (neu) S.d.turm.stufe = k.turm;
+        S.d.packs += bel.packs; S.d.muenzen += bel.muenzen; S.d.kampfstaub = (S.d.kampfstaub || 0) + bel.kampfstaub;
+        sonderPacksGeben({ turm: 1 });
+        text += `<p class="belohnung">♜ <b>+1 Turmpack</b> (×${CONFIG.sonderPackTypen.turm.faktor}) &nbsp; ${ICON.pack} <b>+${bel.packs}</b> &nbsp; ${ICON.muenze} <b>+${fmt(bel.muenzen)}</b> &nbsp; ⚔ <b>+${fmt(bel.kampfstaub)}</b> Kampfstaub</p>${neu ? `<p>Neue Rekordstufe im Ewigen Turm: <b>${k.turm}</b></p>` : ''}`;
+        setTimeout(() => { konfetti(160); Sound.jackpot(6); }, 300);
       } else {
         const erstSieg = !fort[k.id];
         const bel = belohnung(k, erstSieg);
-        S.d.packs += bel.packs; S.d.muenzen += bel.muenzen;
+        S.d.packs += bel.packs; S.d.muenzen += bel.muenzen; S.d.kampfstaub = (S.d.kampfstaub || 0) + bel.kampfstaub;
         fort[k.id] = true;
-        text += `<p class="belohnung">${ICON.pack} <b>+${bel.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${fmt(bel.muenzen)}</b> Münzen${erstSieg ? '' : ' <small class="leise">(Wiederholung)</small>'}</p>`;
+        text += `<p class="belohnung">${ICON.pack} <b>+${bel.packs}</b> Packs &nbsp; ${ICON.muenze} <b>+${fmt(bel.muenzen)}</b> Münzen &nbsp; ⚔ <b>+${fmt(bel.kampfstaub)}</b> Kampfstaub${erstSieg ? '' : ' <small class="leise">(Wiederholung)</small>'}</p>`;
         if (bel.welt) {
           const el = themaElement(k.dim, k.welt);
-          sonderPacksGeben({ gluecks: bel.welt.gluecks, element: bel.welt.element }, el);
+          sonderPacksGeben({ gluecks: bel.welt.gluecks, element: bel.welt.element, kern: bel.welt.kern || 0, tief: bel.welt.tief || 0 }, el);
           S.d.muenzen += bel.welt.muenzen;
-          weltText = `<div class="welt-geschafft" style="background-image:linear-gradient(90deg, rgba(10,6,24,.85), rgba(10,6,24,.3)), url('${weltThema(k.dim, k.welt)}')"><small>Welt abgeschlossen</small><h3>${esc(weltName(k.dim, k.welt))}</h3><p>★ <b>${bel.welt.gluecks}</b> Glückspack${bel.welt.gluecks > 1 ? 's' : ''} · <b>${bel.welt.element}</b> ${esc(ELEMENTE[el].name)}-Elementpack${bel.welt.element > 1 ? 's' : ''} · <b>${fmt(bel.welt.muenzen)}</b> Münzen</p></div>`;
+          weltText = `<div class="welt-geschafft" style="background-image:linear-gradient(90deg, rgba(10,6,24,.85), rgba(10,6,24,.3)), url('${weltThema(k.dim, k.welt)}')"><small>Welt abgeschlossen</small><h3>${esc(weltName(k.dim, k.welt))}</h3><p>★ <b>${bel.welt.gluecks}</b> Glückspack${bel.welt.gluecks > 1 ? 's' : ''} · <b>${bel.welt.element}</b> ${esc(ELEMENTE[el].name)}-Elementpack${bel.welt.element > 1 ? 's' : ''}${bel.welt.kern ? ` · ★ <b>${bel.welt.kern}</b> Kernpacks (×20)` : ''}${bel.welt.tief ? ` · ✷ <b>${bel.welt.tief}</b> Tiefkernpacks (×30)` : ''} · <b>${fmt(bel.welt.muenzen)}</b> Münzen</p></div>`;
           setTimeout(() => { konfetti(220); Sound.jackpot(9); }, 400);
         }
       }

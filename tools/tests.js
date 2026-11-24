@@ -1,5 +1,5 @@
 // Logik-Tests nach Manifest 18.4. Läuft im Browser: tools/tests.html
-import { CONFIG, HOLO_STUFEN, LOOKS } from '../js/config.js';
+import { CONFIG, HOLO_STUFEN, LOOKS, KLASSEN } from '../js/config.js';
 import { ELEMENTE, N, faktorInfo, faktor, gegenpol, mod } from '../js/elements.js';
 import { Rng } from '../js/rng.js';
 import { ARTEN, REGULAERE_ARTEN, ARTEN_GEWICHTE } from '../js/species.js';
@@ -104,7 +104,7 @@ test('Verteilung: jeder Zusatzlook 0,5 % bei 10 Mio. Würfen', () => {
   return binomOk(t, n, 0.005);
 });
 test('Verteilung: Karten aus wuerfleKarte (1 Mio.), Effekte ohne Pity, Klassen, Silber-Monster', () => {
-  const r = new Rng('vert-karte'); const n = 1e6; let fx = 0, rh = 0, look = 0; const kl = new Array(8).fill(0);
+  const r = new Rng('vert-karte'); const n = 1e6; let fx = 0, rh = 0, look = 0; const kl = new Array(KLASSEN.length).fill(0);
   for (let i = 0; i < n; i++) { const { karte: c } = wuerfleKarte(r, CONFIG.effekte.mind1); if (c.fx.length) fx++; if (c.holo === 'reverse') rh++; if (c.looks & 1) look++; kl[c.kl]++; }
   const a = binomOk(fx, n, CONFIG.effekte.mind1), b = binomOk(rh, n, 0.01), c = binomOk(look, n, 0.005), d = binomOk(kl[0], n, CONFIG.klassen[0].chance * REG_ANTEIL), e = binomOk(kl[7], n, CONFIG.klassen[7].chance * REG_ANTEIL);
   return { ok: a.ok && b.ok && c.ok && d.ok && e.ok, info: `Effekt ${a.info}\nRH ${b.info}\nLook ${c.info}\nBronze ${d.info}\nDiamond ${e.info}` };
@@ -142,8 +142,8 @@ test('Stärke = Summe der Attribute, im Klassenbereich, Obergrenzen eingehalten'
     const { karte: c } = wuerfleKarte(r, 0);
     const K = CONFIG.klassen[c.kl], s = staerke(c.a);
     const deckel = Object.values(CONFIG.obergrenzen).reduce((a, b) => a + b, 0);
-    if (s < K.min || s > Math.min(K.max, deckel)) fehler = `Stärke ${s} außerhalb ${K.name}`;
-    for (const [k, v] of Object.entries(c.a)) if (v > CONFIG.obergrenzen[k]) fehler = `${k}=${v}`;
+    if (s < K.min || (c.kl < 8 && s > Math.min(K.max, deckel))) fehler = `Stärke ${s} außerhalb ${K.name}`;
+    if (c.kl < 8) for (const [k, v] of Object.entries(c.a)) if (v > CONFIG.obergrenzen[k]) fehler = `${k}=${v}`; // Brilliant: bewusst ohne Obergrenzen
   }
   return { ok: !fehler, info: fehler };
 });
@@ -151,6 +151,14 @@ test('Kosten: Stärke + Effekt-Seltenheit (Stufe 1–5 kostet +1 bis +5)', () =>
   const c = (fx, fxs) => ({ art: 0, kl: 0, a: { kraft: 10, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx, fxs });
   return kosten(c([], [])) === 10 && kosten(c([1], [1])) === 11 && kosten(c([55, 1], [4, 1])) === 15 && kosten(c([56, 57, 58], [5, 5, 5])) === 25;
 });
+test('Brilliant: 10× seltener als Diamond, breite Kodierung für Werte über 35, Zusatzeffekt Stufe 6', () => {
+  const ok1 = Math.abs(KLASSEN[8].chance - KLASSEN[7].chance / 10) < 1e-12 && Math.abs(KLASSEN.reduce((s, k) => s + k.chance, 0) - 1) < 1e-9;
+  const c = { art: 7, kl: 8, a: { kraft: 60, schutz: 40, groesse: 3, wildheit: 2, seltsamkeit: 1, schlagzahl: 4, teamplatz: 2, heilung: 0, kapazitaet: 0 }, holo: 'holo', looks: 3, fx: [12, 55], fxs: [6, 4] };
+  const d = dekodiere(kodiere(c));
+  const normal = dekodiere(kodiere({ ...c, kl: 3, a: { ...c.a, kraft: 10, schutz: 4 } }));
+  return { ok: ok1 && d.kl === 8 && d.a.kraft === 60 && d.a.schutz === 40 && d.fxs.join() === '6,4' && d.holo === 'holo' && d.looks === 3 && normal.kl === 3 && normal.a.kraft === 10, info: `Brilliant ${KLASSEN[8].chance}, Code-Länge ${kodiere(c).length}` };
+});
+test('Verstärken: Kosten aufgerundet 1,1^Stärke (exponentiell)', () => { const f = CONFIG.kampfstaub.verstaerkenKosten; return f(5) === 2 && f(24) === 10 && f(100) === 13781 && f(30) > f(29); });
 test('Kodierung: Effekt-Seltenheit bleibt erhalten, alte Codes lesen sich als Stufe 1', () => {
   const c = { art: 5, kl: 3, a: { kraft: 4, schutz: 2, groesse: 1, wildheit: 0, seltsamkeit: 0, schlagzahl: 1, teamplatz: 0, heilung: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx: [55, 14, 63], fxs: [5, 1, 3] };
   const d = dekodiere(kodiere(c));
@@ -277,6 +285,8 @@ const effektTests = {
   'zweiteratem-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['zweiteratem'])], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return !u.tot && u.atemGenutzt && b.seiten[0].feld.includes(u); },
   'auferstehung-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['auferstehung'])], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return !u.tot && u.schaden === 0; },
   'erinnerung-sofort': () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['erinnerung']), kk({ kraft: 5 })], [kk({ kraft: 30, schlagzahl: 1 })]); leg(1, 0, 0); const u = leg(0, 0, 0); kampf(b); return u.tot && b.seiten[0].hand.length === 0 && b.seiten[0].friedhof.includes(u); },
+  'zielwahl-spieler': () => { const { b, leg } = szenario([kk({ kraft: 5, schlagzahl: 1, wildheit: 2, schutz: 30 })], [kk({ schutz: 30, groesse: 1 }), kk({ schutz: 30, groesse: 1 })]); const u = leg(0, 0, 0); leg(1, 0, 0); const z2 = leg(1, 0, 1); u.zielWahl = z2.uid; b.zug = 2; kampf(b); return z2.schaden > 0 && b.seiten[1].feld[0].schaden === 0; },
+  'verschiebung-spieler': () => { const { b, leg } = szenario([kk({ kraft: 1, seltsamkeit: 3 })], []); const u = leg(0, 0, 0); const ziel = (u.el + 31) % 32; u.verschiebWahl = ziel; b.zug = 2; kampf(b); return u.elZug === ziel; },
   bann: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['bann'], [3])], [kk({ kraft: 5, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.bannBis === b.zug + 2; },
   eintrittsstich: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['eintrittsstich'], [4])], [kk({ schutz: 20 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.schaden === 8; },
   schrumpfzauber: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['schrumpfzauber'], [2])], [kk({ kraft: 10, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return werte(b, z).kraft === 6; },
@@ -291,7 +301,7 @@ const effektTests = {
   dornen: () => { const { b, leg } = szenario([kk({ kraft: 1, schlagzahl: 1, schutz: 30 })], [kk({ schutz: 30 }, ['dornen'])]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return u.schaden === 3; },
   regeneration: () => { const { b, leg } = szenario([kk({ schutz: 10 }, ['regeneration'])], []); const u = leg(0, 0, 0); u.schaden = 5; zugBeginn(b); return u.schaden === 2; },
 };
-for (const [key, f] of Object.entries(effektTests)) { const [k0, zusatz] = key.split('-'); test(`Effekt im Kampf: ${EFFEKTE.find((e) => e.key === k0).name}${zusatz ? ` (${zusatz}: im Zug der Beschwörung getötet)` : ''}`, f); }
+for (const [key, f] of Object.entries(effektTests)) { const [k0, zusatz] = key.split('-'); const e = EFFEKTE.find((x) => x.key === k0); test(e ? `Effekt im Kampf: ${e.name}${zusatz ? ` (${zusatz}: im Zug der Beschwörung getötet)` : ''}` : `Kampf: ${k0} durch den Spieler`, f); }
 
 const ok = ergebnisse.filter((e) => e.ok).length;
 document.getElementById('summe').textContent = `${ok} / ${ergebnisse.length} Tests bestanden`;

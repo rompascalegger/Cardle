@@ -9,7 +9,7 @@
 // Alles, was Balancing ist, steht hier. Der übrige Code liest nur diese Werte.
 
 // Versionskennung, oben in der Hilfe angezeigt. Bei jedem Release hochzählen (Datum + Buchstabe für mehrere am Tag).
-export const VERSION = { kennung: '2026.11.24i', stand: '24.11.2026', notiz: 'Mehrere Packs auf einmal öffnen' };
+export const VERSION = { kennung: '2026.11.24j', stand: '24.11.2026', notiz: 'Brilliant, Staub und Verbessern, Endgame-Packs, Ewiger Turm, Kampfsteuerung' };
 
 export const CONFIG = {
   spielname: 'Cardle', // [OFFEN] Platzhalter, Arbeitsname (Manifest 1.2)
@@ -33,7 +33,7 @@ export const CONFIG = {
   // [FEST] Bereiche Bronze bis Ruby und "Saphire ab 50". [VORSCHLAG] Saphire-Deckel 80, Diamond 70–100.
   // Chancen [Nutzer, 21.11.2026]: Bronze deutlich häufiger (vorher 40/28/17/9/4/1,5/0,4/0,1 %).
   klassen: [
-    { key: 'bronze', name: 'Bronze', min: 1, max: 7, chance: 0.60 },
+    { key: 'bronze', name: 'Bronze', min: 1, max: 7, chance: 0.5999 },
     { key: 'silber', name: 'Silber', min: 7, max: 15, chance: 0.22 },
     { key: 'gold', name: 'Gold', min: 13, max: 25, chance: 0.10 },
     { key: 'platin', name: 'Platin', min: 23, max: 35, chance: 0.05 },
@@ -41,6 +41,8 @@ export const CONFIG = {
     { key: 'ruby', name: 'Ruby', min: 40, max: 60, chance: 0.006 },
     { key: 'saphire', name: 'Saphire', min: 50, max: 80, chance: 0.003 },
     { key: 'diamond', name: 'Diamond', min: 70, max: 100, chance: 0.001 },
+    // [Nutzer, 24.11.2026] Brilliant: 10× seltener als Diamond, kein harter Deckel: ab 100, darüber exponentiell seltener
+    { key: 'brilliant', name: 'Brilliant', min: 100, max: Infinity, chance: 0.0001, mittelUeber: 20 },
   ],
 
   // [VORSCHLAG 5.5] Obergrenzen. Hinweis: Summe 88 (78 ohne Kapazität) liegt unter dem Diamond-Deckel 100.
@@ -75,8 +77,9 @@ export const CONFIG = {
   ],
   // Effekt-Seltenheit [Nutzer, 24.11.2026]: Stufe 1–5, kostet +Stufe Beschwörungspunkte. Neue Effekte wirken je Stufe stärker (bis ×5).
   effektStufen: {
-    namen: ['Gewöhnlich', 'Selten', 'Episch', 'Legendär', 'Mythisch'],
-    farben: ['#3ddc84', '#3d9bff', '#b066ff', '#ffc83d', '#ff4d5e'],
+    // Stufe 6 „Brillant“ (pink) nur als Zusatzeffekt von Brilliant-Karten
+    namen: ['Gewöhnlich', 'Selten', 'Episch', 'Legendär', 'Mythisch', 'Brillant'],
+    farben: ['#3ddc84', '#3d9bff', '#b066ff', '#ffc83d', '#ff4d5e', '#ff5fd2'],
     chancen: [0.55, 0.25, 0.12, 0.06, 0.02], // Würfel für skalierende Effekte
   },
   effekte: {
@@ -140,7 +143,7 @@ export const CONFIG = {
     manuellKostetMuenzen: false, // manuelles Öffnen verbraucht ein Pack aus dem Vorrat
     packKaufbar: true, // Packs für den Vorrat lassen sich zum Basispreis kaufen
     // Verkauf: Wert je Stärkeklasse × Faktor je Seltenheitsstufe. Im Schnitt ~30 Münzen je Pack, also unter dem Packpreis.
-    verkaufKlasse: [1, 1, 2, 5, 12, 30, 80, 200],
+    verkaufKlasse: [1, 1, 2, 5, 12, 30, 80, 200, 1000],
     verkaufStufe: [0, 1, 3, 6, 10, 20, 40, 80, 120, 200, 400, 800, 1600, 3200, 6400],
   },
 
@@ -204,7 +207,7 @@ export const CONFIG = {
     gegnerEinkommen: (w, l) => 22 + w + Math.floor(l / 3),
     gegnerStartBank: (w, l) => 40 + 6 * w + 2 * l,
     effektChance: (w) => Math.min(0.75, 0.4 + 0.02 * w),
-    weltBelohnung: (w) => ({ gluecks: 2 + Math.floor(w / 4), element: 2, muenzen: 20000 + 2000 * w }),
+    weltBelohnung: (w) => ({ gluecks: 2 + Math.floor(w / 4), element: 2, muenzen: 20000 + 2000 * w, kern: 2 + Math.floor(w / 4) }),
   },
 
   // [Nutzer, 24.11.2026] Tiefer Kern: 16 weitere Welten nach dem Kern, Gegnereffekte mit Seltenheit 2–5
@@ -215,11 +218,33 @@ export const CONFIG = {
     gegnerStartBank: (w, l) => 60 + 8 * w + 2 * l,
     effektChance: (w) => Math.min(0.9, 0.55 + 0.02 * w),
     effektStufe: (w) => Math.min(5, 2 + Math.floor((w - 1) / 4)), // Welt 1–4: 2, 5–8: 3, 9–12: 4, 13–16: 5
-    weltBelohnung: (w) => ({ gluecks: 4 + Math.floor(w / 3), element: 3, muenzen: 60000 + 6000 * w }),
+    weltBelohnung: (w) => ({ gluecks: 4 + Math.floor(w / 3), element: 3, muenzen: 60000 + 6000 * w, tief: 2 + Math.floor(w / 4) }),
   },
 
   // [Nutzer, 21.11.2026] Erfolgspack: eins je Erfolg zum Abholen, 10 Karten, seltene Chancen ×5
   erfolgsPack: { karten: 10, faktor: 5 },
+  // [Nutzer, 24.11.2026] Endgame-Packs: Kern ×20, Tiefer Kern ×30, Ewiger Turm ×50 (je 10 Karten)
+  sonderPackTypen: {
+    kern: { name: 'Kernpack', karten: 10, faktor: 20, symbol: '★', farbe: '#b45cff' },
+    tief: { name: 'Tiefkernpack', karten: 10, faktor: 30, symbol: '✷', farbe: '#ff3d5e' },
+    turm: { name: 'Turmpack', karten: 10, faktor: 50, symbol: '♜', farbe: '#ffd447' },
+  },
+  // Ewiger Turm [Nutzer, 24.11.2026]: nach dem Tiefen Kern, 1000 Stufen, jede Stufe +10 % stärker, Sieg: Turmpack
+  turm: {
+    stufen: 1000,
+    staerkeFaktor: (n) => 1.1 ** n, // Gegner-Elementarkraft und -Leben
+    basisStaerke: 3000,
+    gegnerEinkommen: (n) => 40 + Math.floor(n / 10),
+    gegnerStartBank: (n) => 80 + n,
+    leben: (n) => 10 + Math.floor(n / 25),
+    kampfstaub: (n) => 50 + 5 * n,
+  },
+  // Staub zum Verbessern [Nutzer, 24.11.2026]
+  kampfstaub: {
+    proSieg: (w, l, boss) => Math.round((3 + 2 * w + l) * boss), // erster Sieg; Wiederholung: Anteil wie Packs
+    verstaerkenKosten: (staerke) => Math.ceil(1.1 ** staerke), // je +1 Stärke, exponentiell
+  },
+  gluecksstaub: { rerollKosten: (kl) => 10 * (kl + 1) },
   // Elementpack: 10 Karten nur aus dem Element einer Dimension, seltene Chancen ×3
   elementPack: { karten: 10, faktor: 3 },
 

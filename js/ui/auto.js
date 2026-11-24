@@ -24,7 +24,7 @@ export function autoScreen(root) {
   if (einst.autoStoppV !== STOPP_VERSION) { einst.autoStopp = { ...STANDARD_STOPP }; einst.autoStoppV = STOPP_VERSION; }
   einst.autoStopp = Object.assign({}, STANDARD_STOPP, einst.autoStopp || {});
   const st = einst.autoStopp;
-  const sitzung = { packs: 0, karten: 0, muenzen: 0, beste: 0, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), feed: [] };
+  const sitzung = { packs: 0, karten: 0, muenzen: 0, beste: 0, stufen: new Array(15).fill(0), klassen: new Array(KLASSEN.length).fill(0), feed: [] };
 
   const wrap = h('section', { class: 'screen auto' });
   const links = h('div', { class: 'panel auto-steuerung' });

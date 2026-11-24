@@ -892,7 +892,7 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .karten-zeile .kz-stern { color: #ffd447; text-align: center; }
 .karten-zeile .fav-toggle { position: static; width: 24px; height: 24px; font-size: .9rem; opacity: 1; }
 .karten-zeile.kl-bronze { --klf: #c98a52; } .karten-zeile.kl-silber { --klf: #c8ccd4; } .karten-zeile.kl-gold { --klf: #ffcf4a; } .karten-zeile.kl-platin { --klf: #b7e6f0; }
-.karten-zeile.kl-emerald { --klf: #3ddc84; } .karten-zeile.kl-ruby { --klf: #ff4d6d; } .karten-zeile.kl-saphire { --klf: #4d7bff; } .karten-zeile.kl-diamond { --klf: #e8fbff; }
+.karten-zeile.kl-emerald { --klf: #3ddc84; } .karten-zeile.kl-ruby { --klf: #ff4d6d; } .karten-zeile.kl-saphire { --klf: #4d7bff; } .karten-zeile.kl-diamond { --klf: #e8fbff; } .karten-zeile.kl-brilliant { --klf: #ff5fd2; }
 .karten-zeile.im-team { border-left-width: 6px; }
 @media (max-width: 760px) {
   .karten-zeile, .karten-zeile.kopf { grid-template-columns: 26px 26px minmax(0, 1.6fr) 50px 54px; }
@@ -972,3 +972,38 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .sammel-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; max-height: 55vh; overflow-y: auto; padding: 4px; }
 .sammel-karten .karte { cursor: pointer; }
 .sammel-karten { overflow-x: hidden; } .sammel-karten .karte { width: 100%; min-width: 0; }
+.fav-gruppe h4 { margin: 12px 0 4px; font-size: .78rem; color: var(--leise); text-transform: uppercase; letter-spacing: .05em; } .fav-gruppe:first-child h4 { margin-top: 8px; }
+.endgame-btn { background: linear-gradient(135deg, color-mix(in srgb, var(--el) 55%, #1a0f30), #1a0f30); border-color: var(--el); box-shadow: 0 0 14px color-mix(in srgb, var(--el) 50%, transparent); color: #fff; }
+
+/* Verbessern: Verstärken, Neu würfeln, Ernten [Nutzer, 24.11.2026] */
+.verbessern { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid var(--rand); }
+.verbessern h4 { margin: 0 0 6px; }
+.vb-zeile { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.vb-zeile select { max-width: 170px; }
+.verbessern .klein { font-size: .75rem; margin: 2px 0 0; }
+/* Auto-Beschwören je Karte [Nutzer, 24.11.2026] */
+.eh-auto { position: absolute; left: 4px; bottom: 4px; z-index: 4; width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .3); background: rgba(10, 6, 24, .8); font-size: .75rem; line-height: 1; cursor: pointer; filter: grayscale(1); opacity: .45; }
+.eh-auto.an { filter: none; opacity: 1; border-color: #5ffff0; box-shadow: 0 0 6px rgba(95, 255, 240, .6); }
+/* Ewiger Turm */
+.turm-btn { border-color: #ffd447; background: linear-gradient(135deg, #3a2a08, #1a0f30); color: #ffe9a8; }
+.turm-btn.zu { opacity: .55; }
+.turm-buff { display: inline-block; color: #ff9a3d; font-weight: 800; }
+
+/* Kampf: Ziel und Element wählen, Vorschau, Protokollfilter [Nutzer, 24.11.2026] */
+.kf-aktion:empty { display: none; }
+.kf-aktion-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 6px auto; max-width: 960px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 212, 71, .08); border: 1px solid rgba(255, 212, 71, .45); }
+.kf-aktion-box label { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--leise); font-weight: 800; }
+.kf-aktion-box select { max-width: 260px; }
+.kf-aktion-box small { flex-basis: 100%; }
+.eh-wahl { font-size: .58rem; font-weight: 800; color: #ffd447; background: rgba(10, 6, 24, .75); border-radius: 4px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kfv-spalten { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .kfv-spalten { grid-template-columns: 1fr; } }
+.kfv-spalten ul { margin: 4px 0; padding-left: 18px; font-size: .88rem; line-height: 1.45; }
+.kf-log-filter { display: flex; gap: 6px; margin: 6px 0; }
+.kf-log-inhalt .log-gegner { color: #ffb3c0; }
+.kf-log-inhalt .log-du { color: #b8f5d0; }
+.tk-verbessern { position: absolute; top: -8px; right: -8px; z-index: 6; width: 28px; height: 28px; border-radius: 50%; border: 1px solid #ffd447; background: rgba(26, 15, 48, .92); color: #ffd447; font-weight: 900; cursor: pointer; opacity: .75; }
+.team-karte:hover .tk-verbessern { opacity: 1; }
+.vb-dialog { display: grid; grid-template-columns: minmax(160px, 240px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 640px) { .vb-dialog { grid-template-columns: 1fr; } .vb-karte { max-width: 220px; margin: 0 auto; } }
+.verbessern h4 small { font-weight: 600; margin-left: 6px; }

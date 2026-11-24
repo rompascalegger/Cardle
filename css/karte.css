@@ -453,3 +453,28 @@
 .rs-trivia::before { content: '„'; } .rs-trivia::after { content: '“'; }
 .rs-masse { display: flex; gap: 12px; font-size: .8em; color: var(--leise, #a99cc4); margin-bottom: 6px; }
 .k-trivia { margin: 0; padding: .4cqw 1.2cqw; font-size: 2.9cqw; line-height: 1.3; font-style: italic; color: rgba(255, 255, 255, .78); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Brilliant [Nutzer, 24.11.2026]: prismatisch, pink-regenbogen, stärker leuchtend als Diamond */
+.kl-brilliant {
+  --rahmen: var(--facetten) 0 0 / 40px 40px, var(--glitzer) 0 0 / 60px 60px, conic-gradient(from var(--dia), #ff5fd2, #ffd447, #5ffff0, #9a7bff, #ffffff, #ff5fd2);
+  --kl: #fff0fb;
+}
+.kl-brilliant .k-rahmen { animation: diaDreh 3.5s linear infinite, diaGlitzer 4s linear infinite; }
+.kl-brilliant .k-rahmen::after {
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .95) 46%, rgba(255, 150, 230, .9) 50%, rgba(140, 255, 245, .8) 54%, transparent 68%);
+  background-size: 300% 100%; mix-blend-mode: screen; opacity: 1; animation: brillanz 2.4s ease-in-out infinite;
+}
+.kl-brilliant .k-vorne { box-shadow: 0 0 0 .5cqw #ffffff, 0 0 5cqw rgba(255, 95, 210, .95), 0 0 12cqw rgba(95, 255, 240, .5), 0 1.6cqw 5cqw rgba(0, 0, 0, .5); }
+.kl-brilliant .k-panel { box-shadow: inset 0 0 0 .5cqw rgba(255, 255, 255, .8), inset 0 0 0 1cqw rgba(255, 95, 210, .4), inset 0 0 6cqw rgba(255, 150, 230, .4); }
+.kl-brilliant .k-staerke {
+  border-radius: 0; min-width: 14cqw; height: 12.5cqw; padding: 0 1cqw;
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+  background: var(--facetten) 0 0 / 30px 30px, conic-gradient(from var(--dia), #ff5fd2, #ffd447, #5ffff0, #9a7bff, #ff5fd2);
+  box-shadow: none; filter: drop-shadow(0 0 2cqw rgba(255, 95, 210, .95));
+}
+.kl-brilliant .k-kl { background: linear-gradient(90deg, #ff5fd2, #ffd447, #5ffff0, #9a7bff); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 900; }
+.einheit.kl-brilliant { box-shadow: 0 0 18px rgba(255, 95, 210, .95), 0 0 30px rgba(95, 255, 240, .4), 0 6px 16px rgba(0, 0, 0, .45); }
+.wenig-bewegung .kl-brilliant .k-rahmen, .wenig-bewegung .kl-brilliant .k-rahmen::after { animation: none !important; }
+/* Brillant-Zusatzeffekt (Stufe 6): pink, eigene Zeile */
+.k-fx-b.fxs-6 { font-weight: 900; text-shadow: 0 0 1cqw #ff5fd2; }
+.k-fx-b.fxs-6::after { content: ' ★'; color: #ff5fd2; }

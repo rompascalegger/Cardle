@@ -3,16 +3,18 @@ import { CONFIG, KLASSEN, LOOKS } from './config.js';
 import { ATTR_KEYS, leereAttribute } from './attributes.js';
 import { PACK_EFFEKTE, EFFEKT } from './effects.js';
 import { ARTEN, ARTEN_GEWICHTE } from './species.js';
+import { Rng } from './rng.js';
 import { klasseFuerWurf, klassenGrenzen, holoFuerWurf, pityChance, staerke } from './rules.js';
 
 // Punkte auf Attribute verteilen [VORSCHLAG 5.1]: Rollen-Gewichte, Obergrenzen [VORSCHLAG 5.5]
-export function verteilePunkte(rng, summe, rolle) {
+export function verteilePunkte(rng, summe, rolle, ohneDeckel = false) {
   const R = CONFIG.rollen[rolle] || CONFIG.rollen.angreifer;
-  const cap = CONFIG.obergrenzen;
+  // Brilliant: keine Obergrenzen je Attribut (nur das Kodierlimit 1295)
+  const cap = ohneDeckel ? Object.fromEntries(Object.keys(CONFIG.obergrenzen).map((k) => [k, 1295])) : CONFIG.obergrenzen;
   const a = leereAttribute();
   const keys = ATTR_KEYS.filter((k) => (R.g[k] || 0) > 0);
   // Schlagzahl folgt der Rolle (Spielerfeedback: "Schlagzahl ist irgendwie random"): nur Wirbler schlagen oft zu
-  const capVon = (k) => (k === 'schlagzahl' ? Math.min(cap[k], R.schlagMax ?? cap[k]) : cap[k]);
+  const capVon = (k) => (k === 'schlagzahl' ? Math.min(cap[k], ohneDeckel ? 8 : (R.schlagMax ?? cap[k])) : cap[k]);
   const maxSumme = keys.reduce((s, k) => s + capVon(k), 0);
   let rest = Math.min(summe, maxSumme); // Deckel, falls die Klasse mehr verlangt als die Obergrenzen zulassen
   // Mindestpunkte, wenn genug da ist
@@ -29,6 +31,15 @@ export function verteilePunkte(rng, summe, rolle) {
   }
   return a;
 }
+
+// Stärke innerhalb der Klasse. Brilliant hat keinen Deckel: ab 100, jeder weitere Punkt etwas seltener (exponentiell).
+export function staerkeWurf(rng, kl) {
+  const K = KLASSEN[kl];
+  if (Number.isFinite(K.max)) return rng.int(K.min, K.max);
+  return K.min + Math.floor(-Math.log(1 - rng.next()) * (K.mittelUeber || 20));
+}
+// Brilliant-Zusatzeffekt: je Monsterart fest einer der 50 klassischen Effekte, Stufe 6 (pink)
+export const brillantEffekt = (artId) => 1 + Math.floor(new Rng('brillant-' + artId).next() * 50);
 
 // Effektanzahl bei Treffer (bedingte Anteile, auch für Pity-Treffer) [ANNAHME 10.3]
 function effektAnzahl(u) {
@@ -78,8 +89,8 @@ export function wuerfleKarte(rng, effektChance, erzwingeEffekt = false, mult = 1
   if (art.nurKlasse != null) { const z = klassenGrenzen(mult).find((g) => g.i === art.nurKlasse); wuerfe.klasse = z.von + wuerfe.klasse * (z.bis - z.von); }
   const kl = art.nurKlasse ?? klasseFuerWurf(wuerfe.klasse, mult);
   const K = KLASSEN[kl];
-  const summe = rng.int(K.min, K.max);
-  const a = verteilePunkte(rng, summe, art.rolle);
+  const summe = staerkeWurf(rng, kl);
+  const a = verteilePunkte(rng, summe, art.rolle, kl >= 8);
   wuerfe.holo = rng.next();
   const holo = holoFuerWurf(wuerfe.holo, mult);
   wuerfe.looks = [];
@@ -99,6 +110,7 @@ export function wuerfleKarte(rng, effektChance, erzwingeEffekt = false, mult = 1
     fxs = wuerfleEffektStufen(rng, fx);
   }
   wuerfe.pity = erzwingeEffekt;
+  if (kl >= 8) { const b = brillantEffekt(art.id); if (!fx.includes(b)) { fx.push(b); fxs.push(6); } }
   return { karte: { art: art.id, kl, a, holo, looks, fx, fxs }, wuerfe };
 }
 
@@ -128,7 +140,7 @@ export function gegnerKarte(rng, artId, zielStaerke, effekte = [], klFest = null
   if (klFest != null) kl = klFest;
   const K = KLASSEN[kl];
   const summe = Math.max(K.min, Math.min(K.max, zielStaerke));
-  const a = verteilePunkte(rng, summe, art.rolle);
+  const a = verteilePunkte(rng, summe, art.rolle, kl >= 8);
   const fx = effekte.slice(0, 3);
   // fxStufen: feste Stufe (Zahl, für alle skalierenden Effekte) oder Liste; bestehende Effekte bleiben Stufe 1
   const fxs = fx.map((id, i) => (EFFEKT[id].skaliert ? (Array.isArray(fxStufen) ? fxStufen[i] || 1 : fxStufen || 1) : 1));

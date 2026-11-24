@@ -1,7 +1,7 @@
 // Album: Stapel je Monster oder alle Einzelkarten, mit Filtern und Sortierung für jede Eigenschaft.
 // Ausführungen (Holo × Looks) [FEST 11], Looks ab- und auftragen mit Staub, doppelte schwache Karten verkaufen.
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, HOLO_STUFEN } from '../config.js';
-import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald, spitzname, spitznameSetzen, SPITZNAME_MAX, tagVon, tagSetzen } from '../state.js';
+import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald, spitzname, spitznameSetzen, SPITZNAME_MAX, tagVon, tagSetzen, verstaerken, verstaerkenKosten, neuWuerfeln, rerollKosten, ernten, ernteErtrag, STAUB_ARTEN } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { ELEMENTE, glyphSVG, farbe } from '../elements.js';
 import { ATTRIBUTE } from '../attributes.js';
@@ -13,7 +13,7 @@ import { h, modal, toast, ICON, fmt } from './dom.js';
 import { karteVergroessern } from './lupe.js';
 
 const STANDARD = {
-  ansicht: 'monster', suche: '', el: -1, klMin: 0, klMax: 7, stufeMin: 1, holo: 'alle', look: 'alle', fx: 'alle',
+  ansicht: 'monster', suche: '', el: -1, klMin: 0, klMax: KLASSEN.length - 1, stufeMin: 1, holo: 'alle', look: 'alle', fx: 'alle',
   rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, fav: 'alle', tag: 'alle', team: 'alle', besitz: 'alle',
   sort: 'nr', ab: false, seite: 0, offen: false,
 };
@@ -27,7 +27,7 @@ const HOLO_KURZ = { reverse: 'RH', holo: 'H', secret: 'SH', ghost: 'GR' };
 const AUSF_GESAMT = HOLO_STUFEN.length * 32;
 
 export function staubHTML() {
-  return LOOKS.map((l, i) => `<span class="staub-chip" data-tip="${esc(l.staub)}" style="--sc:${LOOK_FARBEN[i]}">${ICON.staub}<span>${esc(l.kurz)}</span><b>${fmt(S.d.staub[l.key])}</b></span>`).join('');
+  return `<span class="staub-chip kampf" data-tip="Kampfstaub: aus Kampagnen-Siegen und durch Ernten. Verstärkt Karten (+1 Stärke)." style="--sc:#ff9a3d">⚔<span>Kampf</span><b>${fmt(S.d.kampfstaub || 0)}</b></span><span class="staub-chip" data-tip="Glücksstaub: durch Ernten. Würfelt Karten neu, sie werden nie schwächer." style="--sc:#5ffff0">🎲<span>Glück</span><b>${fmt(S.d.gluecksstaub || 0)}</b></span>` + LOOKS.map((l, i) => `<span class="staub-chip" data-tip="${esc(l.staub)}" style="--sc:${LOOK_FARBEN[i]}">${ICON.staub}<span>${esc(l.kurz)}</span><b>${fmt(S.d.staub[l.key])}</b></span>`).join('');
 }
 function ausfName(holo, looks) {
   const teile = [];
@@ -96,7 +96,7 @@ export function passt(x, F = ALBUM_F) {
 const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team', 'fav', 'tag'].some((k) => F[k] !== STANDARD[k]);
 
 export const SORTEN = [
-  ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['rolle', 'Rolle'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
+  ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['rolle', 'Rolle'], ['tag', 'Tag'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
   ['kosten', 'Beschwörungskosten'], ['wert', 'Verkaufswert'], ['neu', 'Neueste'],
   ...ATTRIBUTE.map((a) => ['attr:' + a.key, a.name]),
   ['anzahl', 'Anzahl (Monster)'], ['ausf', 'Ausführungen (Monster)'],
@@ -112,6 +112,7 @@ export function kartenWert(x, F = ALBUM_F) {
     case 'wert': return verkaufswert(x.c);
     case 'neu': return x.i;
     case 'rolle': return Object.keys(CONFIG.rollen).indexOf(x.art.rolle) * 1000 + x.sum;
+    case 'tag': return (x.tag ?? CONFIG.tags.length) * 1000 + x.st * 100 + x.sum; // ohne Tag ans Ende (aufsteigend)
     default:
       if (F.sort.startsWith('attr:')) return x.c.a[F.sort.slice(5)] || 0;
       return x.art.id;
@@ -164,6 +165,80 @@ export function kartenZeile(x, { onclick, extra = '', stern = null, klasse = '' 
   if (onclick) { z.addEventListener('click', onclick); z.addEventListener('keydown', (e) => { if (e.key === 'Enter') onclick(e); }); }
   return z;
 }
+
+// Verbessern für jede Karte [Nutzer, 24.11.2026]: Verstärken (Kampfstaub), Neu würfeln (Glücksstaub), Ernten.
+// geaendert: nach Verstärken/Neu würfeln, weg: nach dem Ernten (Karte existiert nicht mehr)
+export function verbessernBox(i, geaendert, weg) {
+  const c = karte(i);
+  const imTeam = S.d.team.includes(i);
+  const box = h('div', { class: 'verbessern' });
+  const zeichne = () => {
+    const c = karte(i);
+    const vk = verstaerkenKosten(i), rk = rerollKosten(i);
+    const attrWahl = h('select', {}, ATTRIBUTE.map((at) => h('option', { value: at.key, text: `${at.name} (${c.a[at.key] || 0})`, selected: at.key === (VB.attr || 'kraft') })));
+    attrWahl.addEventListener('change', () => { VB.attr = attrWahl.value; });
+    const staubWahl = h('select', {}, Object.entries(STAUB_ARTEN).map(([k, n]) => h('option', { value: k, text: n, selected: k === (VB.ernte || 'kampfstaub') })));
+    const ernteText = () => { const e = ernteErtrag(i, staubWahl.value); return `Ernten: +${fmt(e.menge)} ${STAUB_ARTEN[e.art]}${e.looks.length ? ` + ${e.looks.map((l) => `${l.menge} ${l.name}`).join(', ')}` : ''}`; };
+    const ernteKnopf = h('button', { class: 'btn klein gefahr', disabled: imTeam, text: imTeam ? 'Im Team, nicht erntbar' : ernteText() });
+    staubWahl.addEventListener('change', () => { VB.ernte = staubWahl.value; if (!imTeam) ernteKnopf.textContent = ernteText(); });
+    ernteKnopf.addEventListener('click', () => {
+      const art = staubWahl.value;
+      sicherErnten([i], () => { const r = ernten([i], art); if (!r) return; Sound.muenze(); toast(`Geerntet: +${fmt(r.menge)} ${STAUB_ARTEN[r.art]}`); weg && weg(); });
+    });
+    box.replaceChildren(
+      h('h4', { html: `Verbessern <small class="leise">⚔ ${fmt(S.d.kampfstaub || 0)} Kampfstaub · 🎲 ${fmt(S.d.gluecksstaub || 0)} Glücksstaub</small>` }),
+      h('div', { class: 'vb-zeile' }, attrWahl, h('button', { class: 'btn klein', disabled: (S.d.kampfstaub || 0) < vk, html: `⚔ +1 verstärken · ${fmt(vk)}`, title: `Kostet aufgerundet 1,1^Stärke Kampfstaub (du hast ${fmt(S.d.kampfstaub || 0)})`,
+        onclick: () => { const r = verstaerken(i, attrWahl.value); if (!r) { toast('Zu wenig Kampfstaub.'); return; } Sound.stufe(3); toast(`Verstärkt: ${ATTRIBUTE.find((x) => x.key === attrWahl.value).name} ${r.wert} (−${fmt(r.preis)} Kampfstaub)`); zeichne(); geaendert && geaendert(); } })),
+      h('div', { class: 'vb-zeile' }, h('button', { class: 'btn klein', disabled: (S.d.gluecksstaub || 0) < rk, html: `🎲 Neu würfeln · ${fmt(rk)} Glücksstaub`, title: 'Würfelt die Stärke neu. Bisherige Attributpunkte bleiben, zusätzliche Stärke kommt dazu. Die Karte wird nie schwächer, die Klasse kann steigen (bis Brilliant), neue Effekte sind möglich.',
+        onclick: () => {
+          const r = neuWuerfeln(i);
+          if (!r) { toast('Zu wenig Glücksstaub.'); return; }
+          const auf = r.nachher.kl > r.vorher.kl;
+          if (auf || r.neuerEffekt) { Sound.jackpot(r.nachher.kl >= 7 ? 6 : 3); konfettiWenn(r.nachher.kl); } else Sound.stufe(2);
+          toast(`${auf ? `<b>Aufstieg: ${KLASSEN[r.vorher.kl].name} → ${KLASSEN[r.nachher.kl].name}!</b> ` : ''}Stärke ${r.vorher.staerke} → ${r.nachher.staerke}${r.neuerEffekt ? ` · <b>neuer Effekt: ${esc(EFFEKTE.find((e) => e.id === r.neuerEffekt).name)}</b>` : ''}`);
+          zeichne(); geaendert && geaendert();
+        } })),
+      h('div', { class: 'vb-zeile' }, staubWahl, ernteKnopf),
+      h('p', { class: 'leise klein', text: 'Ernten zerstört die Karte: Klassennummer × Stärke Staub der gewählten Art, dazu Look-Staub für jeden Look.' }));
+  };
+  zeichne();
+  return box;
+}
+const VB = {};
+// Dialog: Karte groß und Verbessern daneben
+export function verbessernDialog(i, nachher) {
+  const platz = h('div', { class: 'vb-karte' });
+  const zeigeKarte = () => { const el = karteElement(karte(i), { maxNeigung: 14 }); platz.replaceChildren(el); };
+  zeigeKarte();
+  let m = null;
+  const box = verbessernBox(i, () => { zeigeKarte(); nachher && nachher(); }, () => { m.zu(); nachher && nachher(); });
+  m = modal({ titel: `⬆ ${esc(spitzname(i) || ARTEN[karte(i).art].name)} verbessern`, klasse: 'breit', inhalt: h('div', { class: 'vb-dialog' }, platz, box) });
+}
+
+// Sicherheitsabfrage beim Ernten [Nutzer, 24.11.2026]: Favoriten und Effektkarten nur nach Eintippen von „ERNTEN“
+export function sicherErnten(indizes, weiter) {
+  const kritisch = indizes.filter((i) => S.d.favoriten.includes(i) || dekodiere(S.karten[i]).fx.length);
+  if (!kritisch.length) { weiter(); return; }
+  const WORT = 'ERNTEN';
+  const eingabe = h('input', { type: 'text', class: 'sicher-eingabe', autocomplete: 'off', spellcheck: false, placeholder: WORT });
+  let knopf = null;
+  const pruefe = () => { if (knopf) knopf.disabled = eingabe.value.trim().toUpperCase() !== WORT; };
+  eingabe.addEventListener('input', pruefe);
+  eingabe.addEventListener('keydown', (e) => { if (e.key === 'Enter' && knopf && !knopf.disabled) knopf.click(); });
+  const namen = kritisch.slice(0, 6).map((i) => { const c = dekodiere(S.karten[i]); return `<li><b>${esc(spitzname(i) || ARTEN[c.art].name)}</b>${S.d.favoriten.includes(i) ? ' · ★ Favorit' : ''}${c.fx.length ? ` · ${c.fx.length} Effekt${c.fx.length > 1 ? 'e' : ''}` : ''}</li>`; }).join('');
+  const m = modal({
+    titel: 'Wirklich ernten?',
+    inhalt: h('div', { class: 'sicher-box' },
+      h('p', { html: `Ernten <b>zerstört</b> ${kritisch.length === 1 ? 'diese Karte' : 'diese Karten'} für immer, darunter Favoriten oder Effektkarten:` }),
+      h('ul', { html: namen + (kritisch.length > 6 ? `<li>… und ${fmt(kritisch.length - 6)} weitere</li>` : '') }),
+      h('p', { html: `Tippe <b>${WORT}</b>, um zu bestätigen:` }), eingabe),
+    knoepfe: [{ text: 'Abbrechen' }, { text: 'Endgültig ernten', klasse: 'gefahr', aktion: () => { if (eingabe.value.trim().toUpperCase() !== WORT) return false; weiter(); } }],
+  });
+  knopf = m.box.querySelector('.modal-fuss .gefahr');
+  pruefe();
+  setTimeout(() => eingabe.focus(), 50);
+}
+const konfettiWenn = (kl) => { if (kl >= 6) import('./dom.js').then((d) => d.konfetti(kl >= 8 ? 260 : 120)); };
 
 // Farb-Tag wählen [Nutzer, 24.11.2026]: 10 Farben oder kein Tag
 export function tagWahl(i, fertig) {
@@ -271,12 +346,18 @@ export function sammlungScreen(root) {
   const neuLaden = () => { daten = datenLaden(); zeichneKopf(); zeichneFavoriten(); zeichneGrid(); };
   // Favoriten zuoberst [Nutzer, 24.11.2026]: alle Favoritenkarten, einklappbar, Stern zum Entfernen
   const zeichneFavoriten = () => {
-    const favs = daten.filter((x) => x.fav).sort((a, b) => b.st - a.st || b.c.kl - a.c.kl || b.sum - a.sum);
+    // Alle Favoritenkarten einzeln (auch mehrere vom selben Monster), nach Tag gruppiert, darin nach Seltenheit
+    const favs = daten.filter((x) => x.fav).sort((a, b) => (a.tag ?? 99) - (b.tag ?? 99) || b.st - a.st || b.c.kl - a.c.kl || b.sum - a.sum);
     favBox.hidden = !favs.length;
     if (!favs.length) { favBox.replaceChildren(); return; }
     favBox.replaceChildren(
       h('button', { class: 'sm-fav-kopf', onclick: () => { F.favZu = !F.favZu; zeichneFavoriten(); } }, h('h3', { text: `★ Favoriten (${favs.length})` }), h('span', { class: 'leise', text: F.favZu ? 'anzeigen ▾' : 'einklappen ▴' })),
-      F.favZu ? '' : h('div', { class: 'sm-grid fav-grid' + (listenAnsicht() ? ' als-liste' : '') }, ...(listenAnsicht() ? [listenKopf()] : []), ...favs.map((x) => kartenKachel(x))),
+      F.favZu ? '' : h('div', { class: 'fav-gruppen' }, ...[...new Set(favs.map((x) => x.tag ?? -1))].map((t) => {
+        const gruppe = favs.filter((x) => (x.tag ?? -1) === t);
+        return h('div', { class: 'fav-gruppe' },
+          h('h4', { html: t >= 0 ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[t].farbe}"></i>${CONFIG.tags[t].name} · ${gruppe.length}` : `Ohne Tag · ${gruppe.length}` }),
+          h('div', { class: 'sm-grid fav-grid' + (listenAnsicht() ? ' als-liste' : '') }, ...(listenAnsicht() ? [listenKopf()] : []), ...gruppe.map((x) => kartenKachel(x))));
+      })),
     );
   };
   // Favorit direkt auf der Kachel umschalten, ohne das Popup zu öffnen
@@ -450,6 +531,7 @@ export function sammlungScreen(root) {
             zeichneFavoriten(); zeichneGrid();
           },
         },
+        { text: '⬆ Verbessern', klasse: 'primaer', aktion: (c, zu) => { const x = xVon(c); if (!x) return; zu(); verbessernDialog(x.i, neuLaden); } },
         {
           text: (c) => { const t = xVon(c)?.tag; return t != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[t].farbe}"></i> ${CONFIG.tags[t].name}` : '🏷 Tag'; },
           aktion: (c, zu, knopf) => {
@@ -492,7 +574,7 @@ function verkaufsDialog(nachher) {
   let treffer = [];
   const rechne = () => {
     treffer = doppelteFinden(o);
-    const proKlasse = new Array(8).fill(0);
+    const proKlasse = new Array(KLASSEN.length).fill(0);
     for (const i of treffer) proKlasse[karte(i).kl]++;
     vorschau.innerHTML = treffer.length
       ? `<b>${fmt(treffer.length)}</b> Karten für <b>${ICON.muenze} ${fmt(wertVon(treffer))}</b> Münzen<br><small class="leise">${proKlasse.map((n, k) => (n ? `${KLASSEN[k].name} ${fmt(n)}` : '')).filter(Boolean).join(' · ')}</small>`
@@ -575,7 +657,8 @@ export function stapelDetail(artId, nachher) {
       class: 'btn klein', disabled: imTeam || istFav, html: imTeam ? 'Im Team, nicht verkaufbar' : istFav ? 'Favorit, nicht verkaufbar' : `${ICON.muenze} Diese Karte verkaufen +${fmt(verkaufswert(c))}`,
       onclick: () => { const ziel = auswahl; sicherVerkaufen([ziel], () => { const r = verkaufen([ziel]); Sound.muenze(); toast(`Verkauft: +${fmt(r.muenzen)} Münzen`); auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); }); },
     });
-    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), nickKnopf, favKnopf, tagKnopf, verkauf);
+    const verbessern = verbessernBox(auswahl, () => { zeichne(); nachher && nachher(); }, () => { auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); });
+    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), verbessern, h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), nickKnopf, favKnopf, tagKnopf, verkauf);
 
     const liste = alle();
     const ausfChips = [...s.ausf.entries()].sort((x, y) => y[0] - x[0]).map(([k, n]) => {

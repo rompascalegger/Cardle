@@ -8,7 +8,7 @@ import { ARTEN } from '../species.js';
 const ROLLEN = Object.keys(CONFIG.rollen);
 import { staerke, kosten, plaetzeBelegt, plaetzeBringt } from '../rules.js';
 import { h, toast, fmt, ICON } from './dom.js';
-import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips, suchFeld, listenAnsicht, ansichtUmschalter, kartenZeile, listenKopf } from './sammlung.js';
+import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips, suchFeld, listenAnsicht, ansichtUmschalter, kartenZeile, listenKopf, verbessernDialog } from './sammlung.js';
 
 // Eigene Filter für den Teambildschirm (gleiche Möglichkeiten wie im Album)
 const T_STANDARD = { ...FILTER_STANDARD, team: 'nicht', sort: 'staerke', ab: true, offen: false };
@@ -78,6 +78,10 @@ export function teamScreen(root, nav) {
     const tg = S.d.tags?.[i];
     if (tg != null) box.append(h('span', { class: 'tag-marke', style: `--tag:${CONFIG.tags[tg].farbe}`, title: `Tag: ${CONFIG.tags[tg].name}` }));
     if (S.d.spitznamen?.[i]) box.querySelector('.tk-info')?.prepend(h('b', { class: 'tk-nick', text: `„${S.d.spitznamen[i]}“` }));
+    // Jede Karte verbessern [Nutzer, 24.11.2026]
+    const vb = h('button', { class: 'tk-verbessern', title: 'Verbessern: Kampfstaub, Glücksstaub, Ernten', text: '⬆' });
+    vb.addEventListener('click', (e) => { e.stopPropagation(); verbessernDialog(i, () => neu()); });
+    box.append(vb);
     box.addEventListener('click', () => beiKlick(i));
     return box;
   };

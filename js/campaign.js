@@ -111,6 +111,7 @@ export const weltenGesamt = () => DIMENSIONEN.reduce((s, d) => s + d.welten.leng
 
 // Stärke und Beschwörung hängen vom Gesamtfortschritt ab: je mehr Welten fertig, desto härter
 export function kampfWerte(k, fort) {
+  if (k.turm) { const T = CONFIG.turm; return { staerke: T.basisStaerke, einkommen: T.gegnerEinkommen(k.turm), startBank: T.gegnerStartBank(k.turm), faktor: T.staerkeFaktor(k.turm) }; }
   const fertig = weltenFertig(fort);
   if (k.kern) return { staerke: Math.round(k.basis), einkommen: kernCfg(k.dim).gegnerEinkommen(k.welt, k.stufe) + (k.weltBoss ? 3 : 0), startBank: k.startBank, faktor: 1 };
   return {
@@ -119,6 +120,14 @@ export function kampfWerte(k, fort) {
     startBank: k.startBank,
     faktor: K.fortschrittFaktor(fertig),
   };
+}
+
+// ---------- Ewiger Turm [Nutzer, 24.11.2026] ----------
+export const turmOffen = (fort) => dimensionFertig(fort, TIEF_DIM);
+export function turmKampf(n) {
+  const basis = kampfNachId(`d${TIEF_DIM}w16l${K.stufenProWelt}`);
+  const els = [mod(n * 3), gegenpol(mod(n * 3)), mod(n * 7 + 5), gegenpol(mod(n * 7 + 5))];
+  return { ...basis, id: `turm-${n}`, turm: n, name: `Ewiger Turm · Stufe ${n}`, els, leben: CONFIG.turm.leben(n), startBank: CONFIG.turm.gegnerStartBank(n), boss: n % 10 === 0, weltBoss: n % 10 === 0, zwischenboss: false };
 }
 
 // ---------- Gegner ----------
@@ -192,9 +201,11 @@ export function belohnung(k, ersterSieg = true) {
   if (k.weltBoss) { packs = B.weltBossPacks(w); muenzen = B.weltBossMuenzen(w); }
   else if (k.zwischenboss) { packs = B.zwischenbossPacks(w); muenzen = B.zwischenbossMuenzen(w); }
   else { packs = B.stufePacks(w, l); muenzen = B.stufeMuenzen(w, l); }
-  if (!ersterSieg) { packs = Math.max(1, Math.round(packs * K.wiederholungsAnteil)); muenzen = Math.round(muenzen * K.wiederholungsAnteil); }
+  let kampfstaub = CONFIG.kampfstaub.proSieg(w, l, k.weltBoss ? 3 : k.zwischenboss ? 2 : 1) * (k.tief ? 3 : k.kern ? 2 : 1);
+  if (!ersterSieg) { packs = Math.max(1, Math.round(packs * K.wiederholungsAnteil)); muenzen = Math.round(muenzen * K.wiederholungsAnteil); kampfstaub = Math.max(1, Math.round(kampfstaub * K.wiederholungsAnteil)); }
+  if (k.turm) return { packs: 5, muenzen: 50000 + 2000 * k.turm, welt: null, kampfstaub: CONFIG.turm.kampfstaub(k.turm), turmPack: 1 };
   const welt = k.weltBoss && ersterSieg ? (k.kern ? kernCfg(k.dim).weltBelohnung(k.welt) : K.weltBelohnung(k.welt)) : null;
-  return { packs, muenzen, welt };
+  return { packs, muenzen, welt, kampfstaub };
 }
 
 // Einschätzung im Vergleich zur eigenen Teamstärke

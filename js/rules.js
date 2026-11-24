@@ -61,7 +61,9 @@ export function seltenheit(holo, k, e) {
   const looks = e === 0 ? k : (k === 0 ? 0 : (k <= 4 ? S.looksMitEffekt1bis4 : S.looksMitEffekt5));
   return Math.min(S.namen.length, S.basis[holo] + looks + S.effekt[e]);
 }
-export const kartenSeltenheit = (c) => seltenheit(c.holo, lookAnzahl(c.looks), c.fx.length);
+// Der Brilliant-Zusatzeffekt (Stufe 6) zählt nicht als Effekt für die Kartenseltenheit
+export const normaleEffekte = (c) => c.fx.filter((_, i) => (c.fxs?.[i] || 1) < 6).length;
+export const kartenSeltenheit = (c) => seltenheit(c.holo, lookAnzahl(c.looks), normaleEffekte(c));
 
 function binom(n, k) { let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - i + 1)) / i; return r; }
 export function pHolo(h) {
@@ -138,28 +140,34 @@ export const staubBeimAbtragen = (c) => c.kl + 1; // [ANNAHME] Klassennummer 1..
 // Format: art(2) kl(1) 9×attr(1) holo(1) looks(1) [fx(2)]*  (gerade Länge)
 // Altes Format mit 8 Attributen (ohne Heilung) hat ungerade Länge und wird weiter gelesen.
 const b36 = (n, len) => n.toString(36).padStart(len, '0');
+// Breites Format (Brilliant oder Attribut > 35): Klassenzeichen = Klasse + 10, ein Füllzeichen, je Attribut 2 Zeichen.
+// Länge 24 + Effekte, bleibt gerade. Altes und normales Format werden unverändert gelesen.
 export function kodiere(c) {
-  let s = b36(c.art, 2) + c.kl.toString(36);
-  for (const k of ATTR_KEYS) s += Math.min(35, c.a[k] || 0).toString(36);
+  const breit = c.kl >= 8 || ATTR_KEYS.some((k) => (c.a[k] || 0) > 35);
+  let s = b36(c.art, 2) + (breit ? (c.kl + 10).toString(36) + '0' : c.kl.toString(36));
+  for (const k of ATTR_KEYS) s += breit ? b36(Math.min(1295, c.a[k] || 0), 2) : Math.min(35, c.a[k] || 0).toString(36);
   s += HOLO_STUFEN.indexOf(c.holo).toString(36) + c.looks.toString(36);
-  // Effekt-Seltenheit (Stufe 1–5) steckt im Code: id + 200 × (Stufe − 1). Alte Karten lesen sich als Stufe 1.
+  // Effekt-Seltenheit (Stufe 1–6) steckt im Code: id + 200 × (Stufe − 1). Alte Karten lesen sich als Stufe 1.
   c.fx.forEach((id, i) => { s += b36(id + 200 * ((c.fxs?.[i] || 1) - 1), 2); });
   return s;
 }
 const ALTE_KEYS = ATTR_KEYS.filter((k) => k !== 'heilung');
 export function dekodiere(s) {
-  const alt = s.length % 2 === 1;
+  const klz = parseInt(s[2], 36);
+  const breit = klz >= 10;
+  const alt = !breit && s.length % 2 === 1;
   const keys = alt ? ALTE_KEYS : ATTR_KEYS;
   const a = {};
-  keys.forEach((k, i) => { a[k] = parseInt(s[3 + i], 36); });
+  const start = breit ? 4 : 3;
+  keys.forEach((k, i) => { a[k] = breit ? parseInt(s.slice(start + 2 * i, start + 2 * i + 2), 36) : parseInt(s[start + i], 36); });
   if (alt) a.heilung = 0;
-  const h = 3 + keys.length;
+  const h = start + keys.length * (breit ? 2 : 1);
   const fx = [];
   const fxs = [];
   for (let i = h + 2; i + 1 < s.length; i += 2) { const n = parseInt(s.slice(i, i + 2), 36); fx.push(n % 200); fxs.push(Math.floor(n / 200) + 1); }
   return {
     art: parseInt(s.slice(0, 2), 36),
-    kl: parseInt(s[2], 36),
+    kl: breit ? klz - 10 : klz,
     a,
     holo: HOLO_STUFEN[parseInt(s[h], 36)],
     looks: parseInt(s[h + 1], 36),

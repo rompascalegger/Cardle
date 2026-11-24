@@ -31,19 +31,23 @@ function neueSeite(id, name, karten, leben, rng, einkommen = CONFIG.kampf.beschw
   return { id, name, leben, maxLeben: leben, bank: startBank, basisEinkommen: einkommen, hand: karten.map((c) => neueEinheit(c, id, rng)), feld: [], friedhof: [], lebenZug: -1, ankerGenutzt: false, angriffe: 0 };
 }
 
-export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false, gegnerEinkommen, gegnerStartBank = 0 }) {
-  return {
+export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false, gegnerEinkommen, gegnerStartBank = 0, gegnerFaktor = 1 }) {
+  const b = {
     zug: 0, rng, autoSpieler,
     seiten: [neueSeite(0, spielerName, spielerKarten, spielerLeben, rng), neueSeite(1, gegnerName, gegnerKarten, gegnerLeben, rng, gegnerEinkommen, gegnerStartBank)],
     ende: null, ev: [], log: [],
   };
+  // Stärkebuff (Ewiger Turm): Elementarkraft und Lebenspunkte der Gegnerkarten × Faktor
+  b.seiten[1].staerkeFaktor = gegnerFaktor;
+  return b;
 }
 
 // ---------- Hilfen ----------
 const lebend = (s) => s.feld.filter((u) => u && !u.tot);
 const gegner = (b, s) => b.seiten[1 - s];
 function emit(b, e) { b.ev.push(e); }
-function log(b, text) { b.log.push({ zug: b.zug, text }); }
+// seite: 0 = Spieler, 1 = Gegner, null = beide/neutral (für den Protokollfilter)
+function log(b, text, seite = null) { b.log.push({ zug: b.zug, text, seite }); }
 
 // Effekt wirkt? [FEST 9.1] nur solange die Karte lebt, ab dem nächsten Zug (außer Blitz). Nachbrenner verlängert um einen Zug.
 export function aktiv(b, u, key) {
@@ -63,7 +67,7 @@ const zaehle = (b, s, key, f = () => true) => quellen(b, s).filter((u) => aktiv(
 export const stufe = (u, key) => u.fxStufe?.[key] || 1;
 const klein = (u) => (u.a.groesse || 0) <= 1;
 
-export function maxLeben(b, u) { return staerke(u.a) + (aktiv(b, u, 'gigant') ? 2 * u.a.groesse : 0); }
+export function maxLeben(b, u) { return Math.round((staerke(u.a) + (aktiv(b, u, 'gigant') ? 2 * u.a.groesse : 0)) * (b.seiten[u.seite].staerkeFaktor || 1)); }
 export const restLeben = (b, u) => maxLeben(b, u) - u.schaden;
 
 // Wirksame Werte eines Monsters in diesem Zug
@@ -91,7 +95,7 @@ export function werte(b, u) {
   let schutz = u.a.schutz + 2 * zaehle(b, s, 'elementschild', (q) => q.el === u.el) + (aktiv(b, u, 'ruestung') ? 4 : 0)
     + (aktiv(b, u, 'koeder') ? 2 : 0) + (aktiv(b, u, 'tarnung') ? 1 : 0) + schutzBuff;
   return {
-    kraft: Math.max(0, kraft),
+    kraft: Math.max(0, kraft) * (b.seiten[s].staerkeFaktor || 1),
     schutz: Math.max(0, schutz),
     wild: u.a.wildheit * (aktiv(b, u, 'wildesherz') ? 3 : 1),
     groesse: u.a.groesse,
@@ -153,7 +157,7 @@ function verliereLeben(b, s, grund) {
   }
   seite.leben--;
   emit(b, { t: 'leben', seite: s, delta: -1, leben: seite.leben, grund });
-  log(b, `${seite.name} verliert ein Leben (${grund}). Noch ${seite.leben}.`);
+  log(b, `${seite.name} verliert ein Leben (${grund}). Noch ${seite.leben}.`, s);
 }
 
 // ---------- Tod ----------
@@ -184,7 +188,7 @@ function stirb(b, u, killer) {
   if (sp >= 0) seite.feld[sp] = null;
   seite.friedhof.push(u);
   emit(b, { t: 'tod', seite: u.seite, uid: u.uid, spalte: sp });
-  log(b, `${u.name} wird ausgeschaltet.`);
+  log(b, `${u.name} wird ausgeschaltet.`, u.seite);
   if (todFx.letzterwille) {
     for (const q of lebend(seite)) q.buff.push({ kraft: 4, bis: b.zug + 2 });
     log(b, `${u.name}: Letzter Wille, Verbündete +4 Elementarkraft.`);
@@ -224,7 +228,7 @@ export function beschwoere(b, s, handIdx, spalte = null, frei = false, grund = n
   u.ersterAngriff = true;
   if (u.aktivAb <= b.zug) aktiviere(b, u);
   emit(b, { t: 'beschwoeren', seite: s, uid: u.uid, spalte: sp, kosten: k, frei, grund });
-  log(b, `${seite.name} beschwört ${u.name}${frei ? ` kostenlos (${grund})` : ` für ${k}`}.`);
+  log(b, `${seite.name} beschwört ${u.name}${frei ? ` kostenlos (${grund})` : ` für ${k}`}.`, s);
   // Blitzeffekte wirken sofort [FEST 9.1]
   if (u.fx.includes('blitzschlag')) {
     const ziele = lebend(gegner(b, s));
@@ -312,7 +316,8 @@ function bedrohung(feindWerte, u) {
 export function kiBeschwoeren(b, s) {
   const seite = b.seiten[s];
   for (let n = 0; n < 40 && !b.ende; n++) {
-    const kandidaten = seite.hand.map((u, i) => ({ u, i, k: effektiveKosten(b, s, u) }));
+    // autoAus: vom Spieler für automatisches Beschwören gesperrte Karten [Nutzer, 24.11.2026]
+    const kandidaten = seite.hand.map((u, i) => ({ u, i, k: effektiveKosten(b, s, u) })).filter((x) => !x.u.autoAus);
     const leistbar = kandidaten.filter((x) => x.k <= seite.bank);
     if (!leistbar.length) break;
     const feinde = lebend(gegner(b, s));
@@ -496,6 +501,11 @@ function planeAngriff(b, u, spalte, w, bereits) {
     bereits.add(t.uid);
     return { typ: 'wahllos', teile: [{ t, punkte: w.kraft }], wahllos: true };
   }
+  // Vom Spieler gewähltes Ziel [Nutzer, 24.11.2026]: gilt, solange es gültig ist (gegenüber oder per Wildheit erreichbar)
+  if (u.zielWahl != null) {
+    const z = kand.find((t) => t.uid === u.zielWahl);
+    if (z && (!koeder.length || koeder.includes(z))) { bereits.add(z.uid); return { typ: z === gegenueber ? 'direkt' : 'frei', teile: [{ t: z, punkte: Math.floor(w.kraft) }] }; }
+  }
   if (!kand.length) return gegenueber ? { typ: 'kein', grund: keinZielGrund(b, u, w, lebende, gegenueber, bereits) } : { typ: 'leere', punkte: w.kraft }; // Verteidiger wählt [FEST 12.4]
   const teile = verteile(b, u, w, kand, koeder, new Map());
   for (const tl of teile) bereits.add(tl.t.uid);
@@ -575,6 +585,7 @@ function treffe(b, u, z, punkte, wahllos, w, typ) {
   }
   z.schaden += schaden;
   emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, hpNach: restLeben(b, z) });
+  log(b, `${u.name} trifft ${z.name} für ${Math.round(schaden * 10) / 10}${f !== 1 ? ` (×${Math.round(f * 100) / 100})` : ''}, noch ${Math.max(0, Math.round(restLeben(b, z) * 10) / 10)}.`, s);
   if (aktiv(b, u, 'lebensraub') && u.schaden > 0) { const h = Math.min(u.schaden, stufe(u, 'lebensraub')); u.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: u.uid, wert: h }); }
   if (aktiv(b, u, 'giftstachel') && !z.tot) z.gift.push({ n: stufe(u, 'giftstachel'), bis: b.zug + 2 });
   if (aktiv(b, z, 'dornen')) { u.schaden += 3; emit(b, { t: 'dornen', seite: 1 - s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }
@@ -591,7 +602,10 @@ export function kampf(b) {
   const vorher = [0, 1].map((s) => lebend(b.seiten[s]).length);
   // 3. Seltsamkeit (für den Gegner sichtbar)
   for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) {
-    const neu = waehleVerschiebung(b, u);
+    // Spieler kann die Verschiebung selbst wählen [Nutzer, 24.11.2026], sonst wählt die KI
+    const wahl = u.verschiebWahl;
+    const erlaubt = wahl != null && erreichbareElemente(u.el, werte(b, u).selt).some((o) => o.el === wahl);
+    const neu = erlaubt ? wahl : waehleVerschiebung(b, u);
     if (neu !== u.elZug) { emit(b, { t: 'verschieben', seite: s, uid: u.uid, von: u.elZug, nach: neu }); u.elZug = neu; }
   }
   // Heilung [Nutzer]: jedes Monster verteilt seine Heilpunkte auf die am stärksten verletzten Verbündeten
@@ -621,7 +635,7 @@ export function kampf(b) {
       versuche[s]++;
       const tr = planeAngriff(b, u, b.seiten[s].feld.indexOf(u), w, bereits);
       if (tr.typ === 'leer') { emit(b, { t: 'angriff', seite: s, von: u.uid, leer: true }); continue; }
-      if (tr.typ === 'kein') { log(b, `${u.name}: Schlag ${k + 1} von ${w.schlag} ohne Ziel – ${tr.grund.text}.`); emit(b, { t: 'angriff', seite: s, von: u.uid, kein: true, grund: tr.grund.kurz }); continue; }
+      if (tr.typ === 'kein') { log(b, `${u.name}: Schlag ${k + 1} von ${w.schlag} ohne Ziel – ${tr.grund.text}.`, s); emit(b, { t: 'angriff', seite: s, von: u.uid, kein: true, grund: tr.grund.kurz }); continue; }
       let teile = tr.teile;
       if (tr.typ === 'leere') { const t = verteidigerWahl(b, u, D, tr.punkte, w); teile = t ? [{ t, punkte: tr.punkte }] : []; }
       for (const tl of teile) { if (u.tot) break; if (!tl.t.tot) treffe(b, u, tl.t, tl.punkte, !!tr.wahllos, w, tr.typ); }
@@ -684,3 +698,13 @@ export const findeEinheit = (b, uid) => {
   return null;
 };
 export { lebend };
+
+// Vorschau [Nutzer, 24.11.2026]: spielt die nächste Kampfrunde auf einer Kopie durch, ohne den echten Kampf zu ändern.
+// Gleicher Zufallszustand, also dieselben Ziele, solange sich bis zum Klick auf „Kampf!“ nichts ändert.
+export function vorschauRunde(b) {
+  const { rng, ...rest } = b;
+  const k = structuredClone({ ...rest, ev: [], log: [] });
+  k.rng = Object.assign(Object.create(Object.getPrototypeOf(rng)), structuredClone({ ...rng }));
+  kampf(k);
+  return { ev: k.ev, log: k.log, ende: k.ende, b: k };
+}

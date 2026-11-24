@@ -57,10 +57,10 @@ export function packsScreen(root, nav) {
     mehrBox.replaceChildren(...mengenOptionen(S.d.packs).map((n) => h('button', { class: 'btn', text: n === S.d.packs ? `Alle ${fmt(n)} öffnen` : `${n} öffnen`, onclick: async () => { await mehrerePacksOeffnen(n); aktualisiere(); } })));
     // Sonderpacks gruppiert: Glückspacks und Elementpacks je Element
     const gruppen = new Map();
-    S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'gluecks' ? 'g' : sp.typ === 'erfolg' ? 'a' : 'e' + sp.el; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
+    S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'element' ? 'e' + sp.el : sp.typ; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
     sonderBox.replaceChildren(...[...gruppen.values()].map(({ sp, idx }) => h('button', {
-      class: 'btn gluecks-btn' + (sp.typ === 'element' ? ' element-btn' : sp.typ === 'erfolg' ? ' erfolg-btn' : ''), style: sp.typ === 'element' ? `--el:${farbe(sp.el)}` : '',
-      html: sp.typ === 'gluecks' ? `★ Glückspack öffnen (${idx.length})` : sp.typ === 'erfolg' ? `🏆 Erfolgspack öffnen (${idx.length})` : `${esc(ELEMENTE[sp.el].name)}-Elementpack öffnen (${idx.length})`,
+      class: 'btn gluecks-btn' + (sp.typ === 'element' ? ' element-btn' : sp.typ === 'erfolg' ? ' erfolg-btn' : CONFIG.sonderPackTypen[sp.typ] ? ' endgame-btn' : ''), style: sp.typ === 'element' ? `--el:${farbe(sp.el)}` : CONFIG.sonderPackTypen[sp.typ] ? `--el:${CONFIG.sonderPackTypen[sp.typ].farbe}` : '',
+      html: CONFIG.sonderPackTypen[sp.typ] ? `${CONFIG.sonderPackTypen[sp.typ].symbol} ${CONFIG.sonderPackTypen[sp.typ].name} öffnen (${idx.length}) · ×${CONFIG.sonderPackTypen[sp.typ].faktor}` : sp.typ === 'gluecks' ? `★ Glückspack öffnen (${idx.length})` : sp.typ === 'erfolg' ? `🏆 Erfolgspack öffnen (${idx.length})` : `${esc(ELEMENTE[sp.el].name)}-Elementpack öffnen (${idx.length})`,
       onclick: () => sonderOeffnen(idx[0]),
     })));
     kauf1.disabled = S.d.muenzen < CONFIG.wirtschaft.packPreis;
@@ -87,7 +87,8 @@ export function packsScreen(root, nav) {
     aenderung('pack'); speichernBald(300);
     Sound.rascheln();
     const sp = pack.sonder;
-    await zeremonie(pack, { titel: sp.typ === 'gluecks' ? `Glückspack · alle Chancen ×${CONFIG.gluecksPack.faktor}` : sp.typ === 'erfolg' ? `Erfolgspack · Chancen ×${CONFIG.erfolgsPack.faktor}` : `${ELEMENTE[sp.el].name}-Elementpack · Chancen ×${CONFIG.elementPack.faktor}` });
+    const ST = CONFIG.sonderPackTypen[sp.typ];
+    await zeremonie(pack, { titel: ST ? `${ST.name} · alle Chancen ×${ST.faktor}` : sp.typ === 'gluecks' ? `Glückspack · alle Chancen ×${CONFIG.gluecksPack.faktor}` : sp.typ === 'erfolg' ? `Erfolgspack · Chancen ×${CONFIG.erfolgsPack.faktor}` : `${ELEMENTE[sp.el].name}-Elementpack · Chancen ×${CONFIG.elementPack.faktor}` });
     schwebe.replaceChildren(packElement());
     aktualisiere();
   };

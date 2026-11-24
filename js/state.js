@@ -3,8 +3,9 @@
 import { CONFIG, LOOKS } from './config.js';
 import { Rng, zufallsSeed } from './rng.js';
 import { ARTEN } from './species.js';
-import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten, kampfWert } from './rules.js';
-import { oeffnePack } from './generator.js';
+import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten, kampfWert, klasseFuerWurf } from './rules.js';
+import { oeffnePack, verteilePunkte, staerkeWurf, brillantEffekt, wuerfleEffektStufen } from './generator.js';
+import { PACK_EFFEKTE } from './effects.js';
 
 const params = new URLSearchParams(globalThis.location ? location.search : '');
 export const URL_SEED = params.get('seed');
@@ -66,12 +67,13 @@ function neuerStand() {
     karten: '', // kodierte Karten, ';'-getrennt
     team: [],
     favoriten: [], // Kartenindizes, nie verkaufbar [Spielerfeedback 24.11.2026]
+    kampfstaub: 0, gluecksstaub: 0, // [Nutzer, 24.11.2026] Verstärken und Neu würfeln
     tags: {}, // Kartenindex → Farb-Tag 0–9 [Nutzer, 24.11.2026]
     spitznamen: {}, // Kartenindex → Spitzname, im Kampf statt des Monsternamens [Nutzer, 24.11.2026]
     teamSlots: Array.from({ length: CONFIG.kampf.teamSlots }, (_, n) => ({ name: `Team ${n + 1}`, team: [] })), // gespeicherte Teams, aktives = S.d.team
     teamSlot: 0,
     kampagne: { v: CONFIG.kampagne.version, fortschritt: {}, siege: 0, niederlagen: 0 },
-    stat: { packs: 0, karten: 0, besteStufe: 1, stufen: new Array(15).fill(0), klassen: new Array(8).fill(0), autoPacks: 0, muenzenAusgegeben: 0 },
+    stat: { packs: 0, karten: 0, besteStufe: 1, stufen: new Array(15).fill(0), klassen: new Array(CONFIG.klassen.length).fill(0), autoPacks: 0, muenzenAusgegeben: 0 },
     einst: { lautstaerke: 0.45, stumm: false, bewegung: 'auto', aufdecken: 'normal' },
     gesehen: [], // Indizes neuer Karten seit dem letzten Besuch der Sammlung
     arten: CONFIG.monster.artenProElement, // Arten je Element, mit denen die Karten gespeichert sind
@@ -165,6 +167,7 @@ export async function laden() {
   S.d.effekteEntdeckt = S.d.effekteEntdeckt || {};
   for (const code of S.karten) effekteMerken(dekodiere(code));
   S.d.favoriten = (S.d.favoriten || []).filter((i) => i < S.karten.length);
+  while (S.d.stat.klassen.length < CONFIG.klassen.length) S.d.stat.klassen.push(0);
   S.d.spitznamen = Object.fromEntries(Object.entries(S.d.spitznamen || {}).filter(([i, n]) => Number(i) < S.karten.length && n));
   S.d.tags = Object.fromEntries(Object.entries(S.d.tags || {}).filter(([i, t]) => Number(i) < S.karten.length && t >= 0 && t < CONFIG.tags.length));
   if (!Array.isArray(S.d.teamSlots)) S.d.teamSlots = [];
@@ -288,7 +291,8 @@ export function packOeffnen({ quelle = 'vorrat', sonderIndex = null } = {}) {
     sonder = S.d.sonderPacks.splice(sonderIndex, 1)[0];
   }
   const G = CONFIG.gluecksPack, E = CONFIG.elementPack, EP = CONFIG.erfolgsPack;
-  const optionen = !sonder ? {} : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : sonder.typ === 'erfolg' ? { mult: EP.faktor, groesse: EP.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
+  const ST = CONFIG.sonderPackTypen[sonder?.typ];
+  const optionen = !sonder ? {} : ST ? { mult: ST.faktor, groesse: ST.karten } : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : sonder.typ === 'erfolg' ? { mult: EP.faktor, groesse: EP.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
   const pack = oeffnePack(S.rng, S.d.pity, optionen);
   pack.sonder = sonder;
   pack.gluecks = sonder?.typ === 'gluecks';
@@ -373,30 +377,105 @@ export function lookAuftragen(i, lookIdx) {
 
 // ---------- Verkaufen ----------
 // Entfernt Karten aus der Sammlung (Indizes verschieben sich, Team wird umgerechnet). Teamkarten werden nie verkauft.
-export function verkaufen(indizes) {
-  const fav = new Set(S.d.favoriten);
-  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i) && !fav.has(i)));
-  if (!weg.size) return { anzahl: 0, muenzen: 0 };
-  let muenzen = 0;
+// Karten aus der Sammlung entfernen; alle Verweise (Team, Slots, Favoriten, Spitznamen, Tags) werden umgerechnet
+function entferneKarten(weg) {
   const neu = [], umrechnung = new Map();
-  S.karten.forEach((code, i) => {
-    if (weg.has(i)) { muenzen += verkaufswert(dekodiere(code)); return; }
-    umrechnung.set(i, neu.length);
-    neu.push(code);
-  });
+  S.karten.forEach((code, i) => { if (weg.has(i)) return; umrechnung.set(i, neu.length); neu.push(code); });
   S.karten = neu;
   const umrechnen = (liste) => liste.map((i) => umrechnung.get(i)).filter((i) => i != null);
   S.d.team = umrechnen(S.d.team);
   S.d.favoriten = umrechnen(S.d.favoriten);
   S.d.spitznamen = Object.fromEntries(Object.entries(S.d.spitznamen || {}).map(([i, n]) => [umrechnung.get(Number(i)), n]).filter(([i]) => i != null));
   S.d.tags = Object.fromEntries(Object.entries(S.d.tags || {}).map(([i, t]) => [umrechnung.get(Number(i)), t]).filter(([i]) => i != null));
-  for (const sl of S.d.teamSlots) sl.team = umrechnen(sl.team);
+  for (const sl of S.d.teamSlots) { sl.team = umrechnen(sl.team); if (sl.autoAus) sl.autoAus = umrechnen(sl.autoAus); }
+  for (const k of Object.values(S.d.einst.dailyKonfig || {})) k.autoAus = umrechnen(k.autoAus || []);
+  baueIndex();
+}
+
+export function verkaufen(indizes) {
+  const fav = new Set(S.d.favoriten);
+  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i) && !fav.has(i)));
+  if (!weg.size) return { anzahl: 0, muenzen: 0 };
+  let muenzen = 0;
+  for (const i of weg) muenzen += verkaufswert(karte(i));
+  entferneKarten(weg);
   S.d.muenzen += muenzen;
   S.d.stat.verkauft = (S.d.stat.verkauft || 0) + weg.size;
-  baueIndex();
   aenderung('sammlung');
   speichernBald(300);
   return { anzahl: weg.size, muenzen };
+}
+
+// ---------- Staub: Verstärken, Neu würfeln, Ernten [Nutzer, 24.11.2026] ----------
+export const STAUB_ARTEN = { kampfstaub: 'Kampfstaub', gluecksstaub: 'Glücksstaub' };
+export const verstaerkenKosten = (i) => CONFIG.kampfstaub.verstaerkenKosten(staerke(karte(i).a));
+// +1 auf ein Attribut gegen Kampfstaub (Kosten aufgerundet 1,1^Stärke)
+export function verstaerken(i, attr) {
+  const c = karte(i);
+  const preis = CONFIG.kampfstaub.verstaerkenKosten(staerke(c.a));
+  if ((S.d.kampfstaub || 0) < preis) return null;
+  S.d.kampfstaub -= preis;
+  c.a[attr] = (c.a[attr] || 0) + 1;
+  S.karten[i] = kodiere(c);
+  baueIndex(); aenderung('sammlung'); speichernBald(300);
+  return { preis, wert: c.a[attr] };
+}
+export const rerollKosten = (i) => CONFIG.gluecksstaub.rerollKosten(karte(i).kl);
+// Neu würfeln gegen Glücksstaub: Klasse kann steigen (bis Brilliant), Stärke wird nie kleiner,
+// bestehende Attributpunkte bleiben, zusätzliche Stärke kommt dazu, neue Effekte möglich (bestehende bleiben).
+export function neuWuerfeln(i) {
+  const c = karte(i);
+  const preis = CONFIG.gluecksstaub.rerollKosten(c.kl);
+  if ((S.d.gluecksstaub || 0) < preis) return null;
+  S.d.gluecksstaub -= preis;
+  const r = S.rng, art = ARTEN[c.art];
+  const vorher = { kl: c.kl, staerke: staerke(c.a), fx: c.fx.length };
+  let kl = c.kl;
+  if (art.nurKlasse == null) { const neuKl = klasseFuerWurf(r.next()); if (neuKl > kl) kl = neuKl; }
+  const ziel = Math.max(vorher.staerke, staerkeWurf(r, kl));
+  // [Nutzer, 24.11.2026] Bestehende Attributpunkte bleiben erhalten, nur die zusätzliche Stärke wird nach Rolle verteilt
+  const plus = ziel - vorher.staerke;
+  if (plus > 0) {
+    const dazu = verteilePunkte(r, plus, art.rolle, true);
+    let verteilt = 0;
+    for (const k in dazu) { c.a[k] = (c.a[k] || 0) + dazu[k]; verteilt += dazu[k]; }
+    if (verteilt < plus) c.a.kraft = (c.a.kraft || 0) + (plus - verteilt);
+  }
+  if (kl > c.kl) { S.d.stat.klassen[kl] = (S.d.stat.klassen[kl] || 0) + 1; c.kl = kl; }
+  // Neuer Effekt mit der normalen Effektchance, höchstens 3 normale Effekte
+  const fxs = c.fxs || c.fx.map(() => 1);
+  const normale = c.fx.filter((_, n) => fxs[n] < 6).length;
+  let neuerEffekt = null;
+  if (normale < CONFIG.effekte.maxProKarte && r.next() < CONFIG.effekte.mind1) {
+    const pool = PACK_EFFEKTE.filter((e) => !c.fx.includes(e.id));
+    const e = pool[Math.floor(r.next() * pool.length)];
+    c.fx.push(e.id); fxs.push(wuerfleEffektStufen(r, [e.id])[0]); neuerEffekt = e.id;
+  }
+  if (c.kl >= 8) { const b = brillantEffekt(c.art); if (!c.fx.includes(b)) { c.fx.push(b); fxs.push(6); } }
+  c.fxs = fxs;
+  S.karten[i] = kodiere(c);
+  effekteMerken(c);
+  baueIndex(); aenderung('sammlung'); speichernBald(300);
+  return { preis, vorher, nachher: { kl: c.kl, staerke: staerke(c.a), fx: c.fx.length }, neuerEffekt };
+}
+// Ernten: zerstört die Karte. Gewählte Staubart = Klassennummer × Stärke, dazu Look-Staub für jeden Look.
+export function ernteErtrag(i, art = 'kampfstaub') {
+  const c = karte(i);
+  const looks = LOOKS.map((l, n) => (hatLook(c.looks, n) ? { key: l.key, name: l.staub, menge: staubBeimAbtragen(c) } : null)).filter(Boolean);
+  return { art, menge: (c.kl + 1) * staerke(c.a), looks };
+}
+export function ernten(indizes, art = 'kampfstaub') {
+  const weg = new Set(indizes.filter((i) => !S.d.team.includes(i)));
+  if (!weg.size || !STAUB_ARTEN[art]) return null;
+  let menge = 0;
+  const lookStaub = {};
+  for (const i of weg) { const e = ernteErtrag(i, art); menge += e.menge; for (const l of e.looks) lookStaub[l.key] = (lookStaub[l.key] || 0) + l.menge; }
+  S.d[art] = (S.d[art] || 0) + menge;
+  for (const k in lookStaub) S.d.staub[k] += lookStaub[k];
+  entferneKarten(weg);
+  S.d.stat.geerntet = (S.d.stat.geerntet || 0) + weg.size;
+  aenderung('sammlung'); speichernBald(300);
+  return { anzahl: weg.size, art, menge, lookStaub };
 }
 
 // Doppelte, schwache Karten finden: je Monster und Ausführung bleiben die stärksten `behalten` Karten.
@@ -519,6 +598,17 @@ export function spitznameSetzen(i, name) {
 }
 // Karte mit Spitzname (für den Kampf)
 export const karteMitName = (i) => { const c = karte(i); const n = spitzname(i); if (n) c.spitzname = n; return c; };
+// Kampf-Einstellungen je Team [Nutzer, 24.11.2026]: Auto-Beschwören (Standard aus) und Karten, die es nicht nutzen darf
+export function kampfKonfig(dailyKl = null) {
+  if (dailyKl != null) {
+    S.d.einst.dailyKonfig = S.d.einst.dailyKonfig || {};
+    return (S.d.einst.dailyKonfig[dailyKl] = S.d.einst.dailyKonfig[dailyKl] || { autoBeschwoeren: false, autoAus: [] });
+  }
+  const sl = S.d.teamSlots[S.d.teamSlot];
+  if (!sl.autoAus) sl.autoAus = [];
+  if (sl.autoBeschwoeren == null) sl.autoBeschwoeren = false;
+  return sl;
+}
 export const tagVon = (i) => S.d.tags?.[i] ?? null;
 export function tagSetzen(i, t) {
   S.d.tags = S.d.tags || {};
@@ -537,8 +627,9 @@ export function favoritUmschalten(i) {
 export const artName = (id) => ARTEN[id].name;
 
 // Sonderpacks gutschreiben: { gluecks: n, element: n } mit Element el
-export function sonderPacksGeben({ gluecks = 0, element = 0 } = {}, el = 0) {
+export function sonderPacksGeben({ gluecks = 0, element = 0, kern = 0, tief = 0, turm = 0 } = {}, el = 0) {
   for (let i = 0; i < gluecks; i++) S.d.sonderPacks.push({ typ: 'gluecks' });
+  for (const [typ, n] of [['kern', kern], ['tief', tief], ['turm', turm]]) for (let i = 0; i < n; i++) S.d.sonderPacks.push({ typ });
   for (let i = 0; i < element; i++) S.d.sonderPacks.push({ typ: 'element', el });
   aenderung('packs');
 }

@@ -839,3 +839,7 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .filter-chip b { color: #ffd447; }
 .filter-chip:hover { background: rgba(255, 212, 71, .25); }
 .filter-chip.alle { border-color: var(--rand); background: transparent; color: var(--leise); }
+
+/* Teamwahl in der Kampfvorschau */
+.vs-teamwahl { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; color: var(--leise); text-transform: uppercase; font-size: .78rem; letter-spacing: .05em; }
+.vs-teamwahl select { flex: 1; max-width: 420px; text-transform: none; letter-spacing: 0; }

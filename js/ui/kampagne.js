@@ -1,6 +1,6 @@
 // Kampagne (Welten, Bosse) und Kampfansicht. [FEST 12] automatischer Kampf, Beschwörung, 5 Leben.
 import { CONFIG, KLASSEN } from '../config.js';
-import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben } from '../state.js';
+import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
 import { attrIcon } from '../attributes.js';
@@ -10,7 +10,7 @@ import { Sound } from '../audio.js';
 import { Rng } from '../rng.js';
 import { staerke } from '../rules.js';
 import { DIMENSIONEN, KERN_DIM, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
-import { dailyKampf, dailyGegner, dailyTeam, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
+import { dailyKampf, dailyGegner, dailyTeam, dailyTeamWaehlen, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
 import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
 import { karteVergroessern } from './lupe.js';
 import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend } from '../battle.js';
@@ -45,7 +45,7 @@ export function kampagneScreen(root, nav) {
     kopf.replaceChildren(
       h('div', { class: 'kp-titel', html: `<h2>Kampagne</h2><span>Welten <b>${fertig}</b> / ${weltenGesamt()}</span><span>Siege <b>${fmt(K.siege)}</b></span><span data-tip="Je mehr Welten fertig sind, desto stärker werden alle Gegner">Gegnerstärke <b>×${zahl(CONFIG.kampagne.fortschrittFaktor(fertig))}</b></span>` }),
       h('div', { class: 'kp-balken' }, h('i', { style: { width: (fertig / weltenGesamt()) * 100 + '%' } })),
-      h('div', { class: 'kp-team', html: `Dein Team: <b>${S.d.team.length}</b> Karten · Stärke <b>${fmt(eigene)}</b> · Plätze ${p.belegt}/${p.gesamt}` }),
+      h('div', { class: 'kp-team', html: `Team ${S.d.teamSlot + 1} · ${esc(S.d.teamSlots[S.d.teamSlot].name)}: <b>${S.d.team.length}</b> Karten · Stärke <b>${fmt(eigene)}</b> · Plätze ${p.belegt}/${p.gesamt}` }),
       h('div', { class: 'kp-knoepfe' },
         h('button', { class: 'btn', text: 'Team', onclick: () => nav('team') }),
         h('button', { class: 'btn', text: 'Erfolge', onclick: () => nav('erfolge') }),
@@ -146,19 +146,36 @@ function vorschau(k, nav) {
     return el;
   }));
   const ok = eigenTeam.length > 0 && (daily || teamPlaetze().ok);
+  // Team wählen: Nummer und Name aus den Teamslots, bei Dailies zusätzlich „automatisch“ [Nutzer, 24.11.2026]
+  const dt = daily ? dailyTeam(k.kl) : null;
+  const aktuell = daily ? dt.wahl : S.d.teamSlot;
+  const klasseZahl = (sl) => (daily ? sl.team.filter((i) => i < S.karten.length && karte(i).kl === k.kl).length : sl.team.length);
+  const teamWahl = h('label', { class: 'vs-teamwahl' }, h('span', { text: 'Team' }), h('select', {
+    onchange: (e) => {
+      const n = Number(e.target.value);
+      if (daily) dailyTeamWaehlen(k.kl, n); else teamSlotWaehlen(n);
+      speichernBald();
+      m.zu();
+      setTimeout(() => vorschau(daily ? dailyKampf(k.kl, undefined, dailyTeam(k.kl).team.length) : k, nav), 260);
+    },
+  }, [
+    ...(daily ? [h('option', { value: -1, selected: aktuell === -1, text: `Automatisch (beste ${KLASSEN[k.kl].name}-Karten)` })] : []),
+    ...S.d.teamSlots.map((sl, n) => h('option', { value: n, selected: aktuell === n, text: `${n + 1} · ${sl.name} (${klasseZahl(sl)} ${daily ? KLASSEN[k.kl].name + '-' : ''}Karten)` })),
+  ]));
   const titel = daily ? esc(k.name) : `${esc(weltName(k.dim, k.welt))} · ${esc(k.name)}`;
   const lohn = daily ? dailyBelohnung(k.kl) : belohnung(k, !fort[k.id]);
-  modal({
+  const m = modal({
     titel,
     inhalt: h('div', {},
+      teamWahl,
       h('div', { class: 'vs-vergleich', html: `
 <div><span>Gegnerteam</span><b>${fmt(ti.staerke)}</b><small>${gegner.length} Karten · Plätze ${ti.belegt}/${ti.gesamt} · ${ICON.herz} ${k.leben}</small><small>${ICON.beschwoerung} ${kw.einkommen} je Zug${kw.startBank ? ` · Vorsprung ${kw.startBank}` : ''}</small></div>
 <div class="vs-sw" style="--sw:${sw.farbe}"><b>${esc(sw.name)}</b></div>
-<div><span>${daily ? `Dein ${KLASSEN[k.kl].name}-Team` : 'Dein Team'}</span><b>${fmt(eigene)}</b><small>${eigenTeam.length} Karten · ${ICON.herz} ${CONFIG.kampf.spielerLeben}</small><small>${ICON.beschwoerung} ${CONFIG.kampf.beschwoerungProZug} je Zug</small></div>` }),
+<div><span>${daily ? `Dein ${KLASSEN[k.kl].name}-Team` : `Team ${S.d.teamSlot + 1} · ${esc(S.d.teamSlots[S.d.teamSlot].name)}`}</span><b>${fmt(eigene)}</b><small>${eigenTeam.length} Karten · ${ICON.herz} ${CONFIG.kampf.spielerLeben}</small><small>${ICON.beschwoerung} ${CONFIG.kampf.beschwoerungProZug} je Zug</small></div>` }),
       h('p', { class: 'leise', html: `Elemente: ${esc(elementNamen(k.els))} · Belohnung ${ICON.pack} <b>${lohn.packs}</b> Packs, ${ICON.muenze} <b>${fmt(lohn.muenzen)}</b>${lohn.gluecks ? ` · <span class="gluecks-text">★ ${lohn.gluecks} Glückspack</span>` : ''}${lohn.welt ? ' · <span class="gluecks-text">★ Weltbelohnung</span>' : ''} · Karte antippen zum Vergrößern` }),
-      daily ? h('p', { class: 'leise', text: `Es kämpfen automatisch deine stärksten ${KLASSEN[k.kl].name}-Karten.` }) : null,
+      daily ? h('p', { class: 'leise', text: dt.wahl >= 0 ? `Es kämpfen die ${KLASSEN[k.kl].name}-Karten aus Team ${dt.wahl + 1} (${S.d.teamSlots[dt.wahl].name}), höchstens 12.` : `Es kämpfen automatisch deine besten ${KLASSEN[k.kl].name}-Karten.` }) : null,
       grid,
-      ok ? null : h('p', { class: 'gold', text: daily ? `Du hast noch keine ${KLASSEN[k.kl].name}-Karten.` : 'Stelle zuerst ein gültiges Team auf.' })),
+      ok ? null : h('p', { class: 'gold', text: daily ? (dt.wahl >= 0 && dt.verfuegbar ? `In Team ${dt.wahl + 1} sind keine ${KLASSEN[k.kl].name}-Karten. Wähle ein anderes Team oder „Automatisch“.` : `Du hast noch keine ${KLASSEN[k.kl].name}-Karten.`) : 'Stelle zuerst ein gültiges Team auf.' })),
     klasse: 'breit',
     knoepfe: [
       daily ? { text: 'Zurück' } : { text: 'Team bearbeiten', aktion: () => nav('team') },
@@ -175,7 +192,7 @@ export function dailyScreen(root, nav) {
   wrap.append(h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Daily Challenges</h2><span>Neue Gegner in <b>${Math.floor(rest / 36e5)} h ${Math.floor((rest % 36e5) / 6e4)} min</b></span><span>Serie <b>${d.serie || 0}</b> Tag${d.serie === 1 ? '' : 'e'}</span></div><p class="leise">Jede Klasse hat ihre eigene Challenge. Es kämpfen nur deine Karten genau dieser Klasse gegen ein Team derselben Klasse. Jede Challenge gibt einmal am Tag eine Belohnung.</p>` }));
   const grid = h('div', { class: 'daily-grid' });
   KLASSEN.forEach((kl, i) => {
-    const k = dailyKampf(i, undefined, dailyTeam(i).verfuegbar);
+    const k = dailyKampf(i, undefined, dailyTeam(i).team.length);
     const { team, verfuegbar } = dailyTeam(i);
     const eigene = team.reduce((x, j) => x + staerke(karte(j).a), 0);
     const ti = teamInfo(dailyGegner(k));
@@ -237,7 +254,7 @@ export function erfolgeMelden(neu) {
 const TEMPI = [1, 2, 3, 5, 10]; // [Nutzer, 21.11.2026] bis ×10
 export function kampfScreen(root, nav, { id, daily = null }) {
   const fortschritt = S.d.kampagne.fortschritt;
-  const k = daily != null ? dailyKampf(daily, undefined, dailyTeam(daily).verfuegbar) : kampfNachId(id);
+  const k = daily != null ? dailyKampf(daily, undefined, dailyTeam(daily).team.length) : kampfNachId(id);
   const eigenTeam = daily != null ? dailyTeam(daily).team : S.d.team;
   if (!k || !eigenTeam.length) { nav(daily != null ? 'daily' : 'kampagne'); return {}; }
   const kw = daily != null ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fortschritt);

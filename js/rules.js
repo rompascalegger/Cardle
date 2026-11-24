@@ -84,6 +84,14 @@ export function seltenheitsChancen() {
 
 // ---------- Stärke, Kosten, Teamplätze ----------
 export const staerke = (a) => ATTR_KEYS.reduce((s, k) => s + (a[k] || 0), 0);
+// Kampfwert für die automatische Teamwahl: Schaden zählt am meisten, Teamkapazität kaum.
+// [Spielerfeedback 24.11.2026] Vorher zählte Kapazität ×3, das Team bestand dann aus Kommandanten ohne Angriff.
+export function kampfWert(c) {
+  const a = c.a;
+  const schaden = (a.kraft || 0) * Math.max(a.schlagzahl > 0 ? 1 : 0, 1 + 0.6 * ((a.schlagzahl || 0) - 1));
+  return schaden * 2.2 + (a.schutz || 0) * 1.2 + (a.heilung || 0) * 1.2 + (a.groesse || 0) * 0.6 + (a.wildheit || 0) * 0.6
+    + (a.seltsamkeit || 0) * 0.5 + (a.teamplatz || 0) * 0.8 + (a.kapazitaet || 0) * 0.3 + (c.fx?.length || 0) * 3;
+}
 export const hatEffekt = (c, key) => c.fx.some((id) => EFFEKT[id].key === key);
 // [ANNAHME 9.6, geändert 24.11.2026 nach Spielerfeedback] Früher: Produkt der Preisfaktoren (3 Effekte bis ×24, Karten mit 288 Kosten).
 // Jetzt: Aufschläge addieren sich und werden gedämpft, mit Deckel. Ein Effekt ×1,15–×1,9, höchstens ×2.

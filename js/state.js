@@ -3,7 +3,7 @@
 import { CONFIG, LOOKS } from './config.js';
 import { Rng, zufallsSeed } from './rng.js';
 import { ARTEN } from './species.js';
-import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten } from './rules.js';
+import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten, kampfWert } from './rules.js';
 import { oeffnePack } from './generator.js';
 
 const params = new URLSearchParams(globalThis.location ? location.search : '');
@@ -429,16 +429,22 @@ export function teamSetzen(team) {
 //   reihenfolge  genau in der übergebenen Reihenfolge (z. B. Sortierung im Teambildschirm)
 // kandidaten: Kartenindizes (null = ganze Sammlung), behalten: aktuelles Team bleibt und wird aufgefüllt,
 // einmalig: jedes Monster höchstens einmal, maxKarten: Obergrenze.
-export function teamBauen({ kandidaten = null, strategie = 'kurve', behalten = false, einmalig = false, maxKarten = 24 } = {}) {
+export function teamBauen(opts = {}) {
+  const team = teamWaehlen(opts);
+  teamSetzen(team);
+  return team.length;
+}
+// Wie teamBauen, gibt das Team nur zurück (auch für Daily Challenges)
+export function teamWaehlen({ kandidaten = null, strategie = 'kurve', behalten = false, einmalig = false, maxKarten = 24, ohnePlaetze = false } = {}) {
   const idx = kandidaten ?? S.karten.map((_, i) => i);
-  const kand = idx.map((i, pos) => { const c = karte(i); const k = kosten(c); return { i, c, pos, k, s: staerke(c.a), w: staerke(c.a) + plaetzeBringt(c) * 3 }; });
+  const kand = idx.map((i, pos) => { const c = karte(i); const k = kosten(c); return { i, c, pos, k, s: staerke(c.a), w: kampfWert(c) }; });
   const team = [];
   const genommen = new Set();
   const arten = new Set();
   let belegt = 0, gesamt = CONFIG.kampf.teamGrundplaetze;
   const nimm = (x) => {
     const b = plaetzeBelegt(x.c), g = plaetzeBringt(x.c);
-    if (team.length >= maxKarten || genommen.has(x.i) || (einmalig && arten.has(x.c.art)) || belegt + b > gesamt + g) return false;
+    if (team.length >= maxKarten || genommen.has(x.i) || (einmalig && arten.has(x.c.art)) || (!ohnePlaetze && belegt + b > gesamt + g)) return false;
     team.push(x.i); genommen.add(x.i); arten.add(x.c.art); belegt += b; gesamt += g; return true;
   };
   if (behalten) for (const i of S.d.team) { const c = karte(i); team.push(i); genommen.add(i); arten.add(c.art); belegt += plaetzeBelegt(c); gesamt += plaetzeBringt(c); }
@@ -455,8 +461,7 @@ export function teamBauen({ kandidaten = null, strategie = 'kurve', behalten = f
     for (const x of kand) { if (n >= stufe.anzahl) break; if (x.k <= stufe.bis && nimm(x)) n++; }
   }
   for (const x of kand) nimm(x);
-  teamSetzen(team);
-  return team.length;
+  return team;
 }
 export const teamAutomatisch = () => teamBauen();
 

@@ -3,6 +3,7 @@ import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN } from './config.js';
 import { ELEMENTE, farbe, farbton, glyphSVG, beziehungen, faktorText } from './elements.js';
 import { ATTRIBUTE, attrIcon } from './attributes.js';
 import { EFFEKT, effektText } from './effects.js';
+import { trivia } from './trivia.js';
 import { ARTEN, FORMEN } from './species.js';
 import { monsterBild } from './monsterart.js';
 import { staerke, kosten, kartenSeltenheit, lookAnzahl, hatLook, seltenheitsChancen, pHolo, pEffekte, prozent, einsVon, plaetzeBelegt, plaetzeBringt, teamplatzMult } from './rules.js';
@@ -47,7 +48,7 @@ export function karteHTML(c, opts = {}) {
  <div class="k-rahmen"></div>
  <div class="k-panel">
   <div class="k-kopf"><span class="k-name">${esc(art.name)}</span><span class="k-staerke" data-tip="Stärke ${sum} = Lebenspunkte"><b>${sum}</b></span></div>
-  <div class="k-bild"><div class="k-bild-inhalt">
+  <div class="k-bild" title="${esc(trivia(c.art).text)}"><div class="k-bild-inhalt">
    <img class="k-bg" src="${bild.bg}" alt="" draggable="false">
    <div class="k-rh"></div>
    <div class="k-monster"><img class="k-fg" src="${bild.fg}" alt="${esc(art.name)}" draggable="false">${lookKopien}</div>
@@ -58,7 +59,7 @@ export function karteHTML(c, opts = {}) {
    <div class="k-stufe" data-tip="Kartenseltenheit: ${esc(stufenName(st))} (${einsVon(CHANCEN[st])} pro Karte)">${esc(stufenKurz(st))}</div>
   </div>
   <div class="k-attr">${attr}</div>
-  <div class="k-fx">${fx}</div>
+  <div class="k-fx">${fx || `<p class="k-trivia">${esc(trivia(c.art).text)}</p>`}</div>
   <div class="k-fuss"><span>${esc(ELEMENTE[el].name)}</span><span class="k-kl">${kl.name}</span>${kost !== sum ? `<span class="k-kost" data-tip="Beschwörungskosten">◆${kost}</span>` : `<span>#${String(c.art + 1).padStart(3, '0')}</span>`}</div>
  </div>
  <div class="k-secret"></div>
@@ -104,6 +105,7 @@ function infoRueckseite(c) {
   return `<div class="rs-info">
 <h4>${esc(art.name)}</h4>
 <div class="rs-sub2">${esc(ELEMENTE[el].name)} · ${esc(FORMEN[art.form] || '')} · ${esc(CONFIG.rollen[art.rolle].name)} · ${kl.name}${art.silber ? ' · <b class="silber-art">Silber-Monster (selten, nur Silber)</b>' : ''}</div>
+${(() => { const t = trivia(art.id); return `<p class="rs-trivia">${esc(t.text)}</p><div class="rs-masse"><span>Größe ${t.groesse}</span><span>Gewicht ${t.gewicht}</span></div>`; })()}
 <div class="rs-attr">${ATTRIBUTE.map((a) => `<div>${attrIcon(a.key)}<span>${a.name}</span><b>${c.a[a.key]}</b></div>`).join('')}</div>
 ${zeile('Stärke / Leben', staerke(c.a))}${zeile('Beschwörung', kosten(c))}${zeile('Teamplätze', `${plaetzeBelegt(c)} belegt${plaetzeBringt(c) ? `, +${plaetzeBringt(c)}` : ''}`)}${zeile('Angriff ×', zahl(teamplatzMult(c.a.teamplatz)))}
 <div class="rs-h">Elementrad</div>

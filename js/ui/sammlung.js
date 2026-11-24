@@ -194,6 +194,21 @@ export function verbessernBox(i, geaendert, weg) {
           toast(`${auf ? `<b>Aufstieg: ${KLASSEN[r.vorher.kl].name} → ${KLASSEN[r.nachher.kl].name}!</b> ` : ''}Stärke ${r.vorher.staerke} → ${r.nachher.staerke}${r.neuerEffekt ? ` · <b>neuer Effekt: ${esc(EFFEKTE.find((e) => e.id === r.neuerEffekt).name)}</b>` : ''}`);
           zeichne(); geaendert && geaendert();
         } })),
+      // Looks auftragen und abtragen [Nutzer, 24.11.2026]
+      h('div', { class: 'vb-zeile vb-looks' }, h('span', { class: 'leise', text: 'Looks:' }), ...LOOKS.map((l, li) => {
+        const hat = hatLook(c.looks, li), vorrat = S.d.staub[l.key] || 0;
+        return h('button', {
+          class: 'btn klein look-btn' + (hat ? ' hat' : ''), disabled: !hat && vorrat < CONFIG.staub.auftragKosten,
+          title: hat ? `${l.name} abtragen: +${staubBeimAbtragen(c)} ${l.staub}` : `${l.name} auftragen: kostet ${CONFIG.staub.auftragKosten} ${l.staub} (du hast ${vorrat})`,
+          html: `<span>${esc(l.kurz)}</span><em>${hat ? `abtragen +${staubBeimAbtragen(c)}` : `auftragen −${CONFIG.staub.auftragKosten} (${vorrat})`}</em>`,
+          onclick: () => {
+            if (hat) { const n = lookAbtragen(i, li); Sound.look(l.key); toast(`${l.name} abgetragen: +${n} ${l.staub}`); }
+            else if (lookAuftragen(i, li)) { Sound.look(l.key); toast(`${l.name} aufgetragen`); }
+            else { toast(`Zu wenig ${l.staub}.`); return; }
+            zeichne(); geaendert && geaendert();
+          },
+        });
+      })),
       h('div', { class: 'vb-zeile' }, ernteKnopf),
       h('p', { class: 'leise klein', text: 'Ernten zerstört die Karte: je Klassennummer × Stärke Kampfstaub und Glücksstaub, dazu Look-Staub für jeden Look.' }));
   };

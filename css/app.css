@@ -1008,3 +1008,4 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 @media (max-width: 640px) { .vb-dialog { grid-template-columns: 1fr; } .vb-karte { max-width: 220px; margin: 0 auto; } }
 .verbessern h4 small { font-weight: 600; margin-left: 6px; }
 .ernte-btn { border-color: #ff9a3d; } .ernte-dialog label { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--leise); }
+.vb-looks { gap: 4px; } .vb-looks .look-btn em { font-style: normal; font-size: .7rem; margin-left: 4px; opacity: .85; }

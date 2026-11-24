@@ -857,3 +857,8 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .team-reihe { flex-direction: column; gap: 10px; }
 .rollen-gruppe h4 { margin: 0 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--leise); }
 .rollen-karten { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Versionskennung oben in der Hilfe */
+.hilfe-version { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 12px; padding: 6px 12px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--rand); font-size: .82rem; }
+.hilfe-version b { color: #ffd447; letter-spacing: .03em; }
+.hilfe-version span { color: var(--leise); }

@@ -1,5 +1,5 @@
 // Hilfe: alle Regeln und Bildschirme erklärt. Zahlen kommen aus der Konfiguration.
-import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN } from '../config.js';
+import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, VERSION } from '../config.js';
 import { ATTRIBUTE, attrIcon } from '../attributes.js';
 import { EFFEKTE } from '../effects.js';
 import { ARTEN, REGULAERE_ARTEN } from '../species.js';
@@ -75,7 +75,8 @@ export function hilfe() {
 <li>Elementarschutz teilt jeden Treffer, schon 1 Punkt halbiert den Schaden.</li>
 <li>Verkaufe schwache Doppelte, um Münzen für das Auto-Öffnen zu bekommen.</li></ul>`),
   ].join('');
-  const inhalt = h('div', { class: 'hilfe' }, sicherung(), h('div', { html }));
+  const version = h('div', { class: 'hilfe-version', title: VERSION.notiz, html: `<b>Version ${esc(VERSION.kennung)}</b><span>Stand ${esc(VERSION.stand)} · ${esc(VERSION.notiz)}</span>` });
+  const inhalt = h('div', { class: 'hilfe' }, version, sicherung(), h('div', { html }));
   modal({ titel: 'Hilfe', inhalt, klasse: 'breit' });
 }
 

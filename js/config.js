@@ -8,6 +8,9 @@
 //
 // Alles, was Balancing ist, steht hier. Der übrige Code liest nur diese Werte.
 
+// Versionskennung, oben in der Hilfe angezeigt. Bei jedem Release hochzählen (Datum + Buchstabe für mehrere am Tag).
+export const VERSION = { kennung: '2026.11.24c', stand: '24.11.2026', notiz: 'Effekt-Seltenheit, 12 Stufen je Welt, Tiefer Kern' };
+
 export const CONFIG = {
   spielname: 'Cardle', // [OFFEN] Platzhalter, Arbeitsname (Manifest 1.2)
   version: '0.1.0',

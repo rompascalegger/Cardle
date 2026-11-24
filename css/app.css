@@ -862,3 +862,42 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .hilfe-version { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 12px; padding: 6px 12px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--rand); font-size: .82rem; }
 .hilfe-version b { color: #ffd447; letter-spacing: .03em; }
 .hilfe-version span { color: var(--leise); }
+
+/* Suche und Favoriten im Album [Nutzer, 24.11.2026] */
+.such-feld { min-width: 220px; flex: 1 1 220px; max-width: 360px; background: var(--panel2); color: var(--text); border: 1px solid var(--rand); border-radius: 10px; padding: 7px 12px; font: 700 .88rem var(--f-ui); }
+.such-feld:focus { outline: none; border-color: #ffd447; }
+.sm-favoriten { border: 1px solid rgba(255, 212, 71, .45); }
+.sm-fav-kopf { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; color: inherit; cursor: pointer; padding: 0; text-align: left; }
+.sm-fav-kopf h3 { margin: 0; color: #ffd447; }
+.fav-grid { margin-top: 10px; }
+.fav-toggle { position: absolute; top: 4px; left: 4px; z-index: 6; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 6, 24, .7); color: #fff; font-size: 1.05rem; line-height: 1; cursor: pointer; opacity: .55; transition: opacity .15s, transform .15s; }
+.sm-kachel:hover .fav-toggle, .fav-toggle.an { opacity: 1; }
+.fav-toggle.an { color: #ffd447; border-color: #ffd447; }
+.fav-toggle:hover { transform: scale(1.12); }
+
+/* Listenansicht [Nutzer, 24.11.2026] */
+.ansicht-umschalter { display: inline-flex; border: 1px solid var(--rand); border-radius: 10px; overflow: hidden; }
+.ansicht-umschalter button { background: var(--panel2); color: var(--leise); border: 0; padding: 5px 11px; font-size: 1rem; cursor: pointer; }
+.ansicht-umschalter button.an { background: #ffd447; color: #1a1030; }
+.als-liste { display: flex !important; flex-direction: column; gap: 3px !important; grid-template-columns: none !important; }
+.karten-zeile { display: grid; grid-template-columns: 26px 26px minmax(130px, 1.6fr) 1fr 1fr 1fr 60px 70px 1.1fr 70px 1.2fr; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 8px; background: var(--panel2); border-left: 4px solid var(--klf, #8a7f6a); font-size: .85rem; cursor: pointer; width: 100%; box-sizing: border-box; }
+.karten-zeile:hover { background: color-mix(in srgb, var(--panel2) 80%, #fff 8%); }
+.karten-zeile.kopf { background: none; border-left-color: transparent; cursor: default; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--leise); font-weight: 800; padding-top: 0; padding-bottom: 0; grid-template-columns: 26px 26px minmax(130px, 1.6fr) 1fr 1fr 1fr 60px 70px 1.1fr 70px 1.2fr; }
+.karten-zeile.leer { opacity: .5; cursor: default; }
+.karten-zeile b small { color: var(--leise); font-weight: 600; margin-left: 4px; }
+.karten-zeile .kz-el { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--el); }
+.karten-zeile .kz-el svg { width: 15px; height: 15px; }
+.karten-zeile .kz-fx i { font-style: normal; margin-right: 2px; }
+.karten-zeile .kz-team { font-style: normal; font-size: .65rem; background: var(--gut); color: #062414; border-radius: 4px; padding: 1px 4px; margin-left: 4px; }
+.karten-zeile .kz-stern { color: #ffd447; text-align: center; }
+.karten-zeile .fav-toggle { position: static; width: 24px; height: 24px; font-size: .9rem; opacity: 1; }
+.karten-zeile.kl-bronze { --klf: #c98a52; } .karten-zeile.kl-silber { --klf: #c8ccd4; } .karten-zeile.kl-gold { --klf: #ffcf4a; } .karten-zeile.kl-platin { --klf: #b7e6f0; }
+.karten-zeile.kl-emerald { --klf: #3ddc84; } .karten-zeile.kl-ruby { --klf: #ff4d6d; } .karten-zeile.kl-saphire { --klf: #4d7bff; } .karten-zeile.kl-diamond { --klf: #e8fbff; }
+.karten-zeile.im-team { border-left-width: 6px; }
+@media (max-width: 760px) {
+  .karten-zeile, .karten-zeile.kopf { grid-template-columns: 26px 26px minmax(0, 1.6fr) 50px 54px; }
+  .karten-zeile > :nth-child(4), .karten-zeile > :nth-child(5), .karten-zeile > :nth-child(6), .karten-zeile > :nth-child(9), .karten-zeile > :nth-child(10), .karten-zeile > :nth-child(11) { display: none; }
+}
+/* Stern auf Kacheln: aus dem Kartenbild heraus an die Ecke, damit der Name lesbar bleibt */
+.sm-kachel .fav-toggle { top: -10px; left: -10px; width: 28px; height: 28px; }
+.karten-zeile.leer > .leise { grid-column: span 7; }

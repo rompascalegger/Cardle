@@ -1,7 +1,7 @@
 // Album: Stapel je Monster oder alle Einzelkarten, mit Filtern und Sortierung für jede Eigenschaft.
 // Ausführungen (Holo × Looks) [FEST 11], Looks ab- und auftragen mit Staub, doppelte schwache Karten verkaufen.
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, HOLO_STUFEN } from '../config.js';
-import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten } from '../state.js';
+import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { ELEMENTE, glyphSVG, farbe } from '../elements.js';
 import { ATTRIBUTE } from '../attributes.js';
@@ -43,18 +43,28 @@ function ausfKurz(holo, looks) {
 }
 
 // Alle Karten einmal entschlüsseln (für Filter und Sortierung)
+// Suchtext: Name, Element, Rolle, Bauplan, Klasse, Holo und Effekte (Suche findet alles davon)
+const SUCH_CACHE = new Map();
+function suchText(art, c) {
+  const basis = SUCH_CACHE.get(art.id) || `${art.name} ${ELEMENTE[art.el].name} ${CONFIG.rollen[art.rolle].name} ${art.bauplan} ${FORMEN[art.form]}`.toLowerCase();
+  SUCH_CACHE.set(art.id, basis);
+  return `${basis} ${KLASSEN[c.kl].name} ${c.holo !== 'keins' ? HOLO_NAMEN[c.holo] : ''} ${c.fx.map((id) => EFFEKTE.find((e) => e.id === id)?.name || '').join(' ')}`.toLowerCase();
+}
+// Daten für eine einzelne Karte ohne Sammlungsindex (z. B. Funde im Auto-Öffnen)
+export function fundDaten(c) { const art = ARTEN[c.art]; return { i: -1, c, art, st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: false, fav: false, ak: ausfuehrungsKey(c), such: suchText(art, c) }; }
 export function datenLaden() {
   const team = new Set(S.d.team);
   const fav = new Set(S.d.favoriten);
   return S.karten.map((code, i) => {
     const c = dekodiere(code);
-    return { i, c, art: ARTEN[c.art], st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: ausfuehrungsKey(c) };
+    const art = ARTEN[c.art];
+    return { i, c, art, st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: ausfuehrungsKey(c), such: suchText(art, c) };
   });
 }
 
 export function passt(x, F = ALBUM_F) {
   const c = x.c;
-  if (F.suche && !x.art.name.toLowerCase().includes(F.suche.toLowerCase())) return false;
+  if (F.suche && !F.suche.toLowerCase().split(/\s+/).filter(Boolean).every((w) => (x.such || x.art.name.toLowerCase()).includes(w))) return false;
   if (F.el >= 0 && x.art.el !== F.el) return false;
   if (c.kl < F.klMin || c.kl > F.klMax) return false;
   if (x.st < F.stufeMin) return false;
@@ -129,6 +139,36 @@ export function sicherVerkaufen(indizes, weiter) {
   setTimeout(() => eingabe.focus(), 50);
 }
 
+// Listenansicht [Nutzer, 24.11.2026]: eine Zeile je Karte statt Kartenbild. Umschalter gilt überall (gespeichert).
+export const listenAnsicht = () => !!S.d.einst.listenAnsicht;
+export function ansichtUmschalter(neu) {
+  const an = listenAnsicht();
+  return h('div', { class: 'ansicht-umschalter', role: 'group', 'aria-label': 'Ansicht' },
+    h('button', { class: an ? '' : 'an', title: 'Kartenansicht', text: '▦', onclick: () => { if (!an) return; S.d.einst.listenAnsicht = false; speichernBald(); neu(); } }),
+    h('button', { class: an ? 'an' : '', title: 'Listenansicht', text: '☰', onclick: () => { if (an) return; S.d.einst.listenAnsicht = true; speichernBald(); neu(); } }));
+}
+export function listenKopf() {
+  return h('div', { class: 'karten-zeile kopf', html: '<span></span><span></span><span>Name</span><span>Element</span><span>Rolle</span><span>Klasse</span><span>Stärke</span><span>Kosten</span><span>Seltenheit</span><span>Effekte</span><span>Ausführung</span>' });
+}
+// Eine Zeile für eine Karte (x aus datenLaden). extra: zusätzlicher Text (z. B. Anzahl), stern: Favoriten-Knopf
+export function kartenZeile(x, { onclick, extra = '', stern = null, klasse = '' } = {}) {
+  const c = x.c;
+  const fx = c.fx.map((id, i) => { const st = c.fxs?.[i] || 1; const e = EFFEKTE.find((q) => q.id === id); return `<i style="color:${CONFIG.effektStufen.farben[st - 1]}" title="${esc(e?.name || '')}">${e?.blitz ? '⚡' : '✦'}</i>`; }).join('');
+  const z = h('div', { class: `karten-zeile kl-${KLASSEN[c.kl].key} ${klasse}`, tabindex: 0, role: 'button',
+    html: `<span class="kz-el" style="--el:${farbe(x.art.el)}">${glyphSVG(x.art.el)}</span><b>${esc(x.art.name)}${x.team ? ' <em class="kz-team">TEAM</em>' : ''}${extra ? ` <small>${esc(extra)}</small>` : ''}</b><span>${esc(ELEMENTE[x.art.el].name)}</span><span>${esc(CONFIG.rollen[x.art.rolle].name)}</span><span class="kz-kl"><i class="kl-punkt kl-${KLASSEN[c.kl].key}"></i>${KLASSEN[c.kl].name}</span><span><b>${x.sum}</b></span><span>${ICON.beschwoerung}${x.kost}</span><span style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span><span class="kz-fx">${fx || '–'}</span><span>${esc(ausfName(c.holo, c.looks))}</span>` });
+  z.prepend(stern || h('span', { class: 'kz-stern' }));
+  if (onclick) { z.addEventListener('click', onclick); z.addEventListener('keydown', (e) => { if (e.key === 'Enter') onclick(e); }); }
+  return z;
+}
+
+// Sichtbares Suchfeld (Name, Element, Rolle, Bauplan, Klasse, Holo, Effekte). Behält den Fokus beim Tippen.
+export function suchFeld(F, neu, platzhalter = 'Suchen: Name, Element, Rolle, Effekt …') {
+  const i = h('input', { type: 'search', class: 'such-feld', value: F.suche || '', placeholder: platzhalter, 'aria-label': 'Suchen' });
+  let t = null;
+  i.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { F.suche = i.value; F.seite = 0; neu(); }, 120); });
+  return i;
+}
+
 // Übersicht der aktiven Filter als Chips, jeder mit × zum Entfernen [Spielerfeedback 24.11.2026]
 export function filterChips(F, standard, neu) {
   const name = (liste, v) => (liste.find(([k]) => String(k) === String(v)) || [, v])[1];
@@ -192,10 +232,26 @@ export function sammlungScreen(root) {
   const seitenOben = h('div', { class: 'seiten' });
   const grid = h('div', { class: 'sm-grid' });
   const seitenUnten = h('div', { class: 'seiten' });
-  wrap.append(kopf, seitenOben, grid, seitenUnten);
+  const favBox = h('div', { class: 'panel sm-favoriten' });
+  wrap.append(kopf, favBox, seitenOben, grid, seitenUnten);
   root.append(wrap);
   let daten = datenLaden();
-  const neuLaden = () => { daten = datenLaden(); zeichneKopf(); zeichneGrid(); };
+  const neuLaden = () => { daten = datenLaden(); zeichneKopf(); zeichneFavoriten(); zeichneGrid(); };
+  // Favoriten zuoberst [Nutzer, 24.11.2026]: alle Favoritenkarten, einklappbar, Stern zum Entfernen
+  const zeichneFavoriten = () => {
+    const favs = daten.filter((x) => x.fav).sort((a, b) => b.st - a.st || b.c.kl - a.c.kl || b.sum - a.sum);
+    favBox.hidden = !favs.length;
+    if (!favs.length) { favBox.replaceChildren(); return; }
+    favBox.replaceChildren(
+      h('button', { class: 'sm-fav-kopf', onclick: () => { F.favZu = !F.favZu; zeichneFavoriten(); } }, h('h3', { text: `★ Favoriten (${favs.length})` }), h('span', { class: 'leise', text: F.favZu ? 'anzeigen ▾' : 'einklappen ▴' })),
+      F.favZu ? '' : h('div', { class: 'sm-grid fav-grid' + (listenAnsicht() ? ' als-liste' : '') }, ...(listenAnsicht() ? [listenKopf()] : []), ...favs.map((x) => kartenKachel(x))),
+    );
+  };
+  // Favorit direkt auf der Kachel umschalten, ohne das Popup zu öffnen
+  const favStern = (x) => h('button', {
+    class: 'fav-toggle' + (x.fav ? ' an' : ''), title: x.fav ? 'Favorit entfernen' : 'Als Favorit merken', text: x.fav ? '★' : '☆',
+    onclick: (e) => { e.stopPropagation(); favoritUmschalten(x.i); Sound.klick(); neuLaden(); },
+  });
 
   const sel = (key, optionen, zahl = false, nachher) => h('select', {
     onchange: (e) => { F[key] = zahl ? Number(e.target.value) : e.target.value; F.seite = 0; nachher ? nachher() : zeichneGrid(); },
@@ -211,6 +267,8 @@ export function sammlungScreen(root) {
       h('div', { class: 'staub-leiste', html: staubHTML() }),
       h('div', { class: 'sm-leiste' },
         h('div', { class: 'sm-ansicht' }, [['monster', 'Monster'], ['karten', 'Alle Karten']].map(([v, t]) => h('button', { class: F.ansicht === v ? 'an' : '', text: t, onclick: () => { F.ansicht = v; F.seite = 0; zeichneKopf(); zeichneGrid(); } }))),
+        ansichtUmschalter(() => { zeichneKopf(); zeichneFavoriten(); zeichneGrid(); }),
+        suchFeld(F, () => { zeichneGrid(); chipsNeu(); }),
         sel('sort', SORTEN, false),
         h('button', { class: 'btn klein', text: F.ab ? '↓ absteigend' : '↑ aufsteigend', onclick: () => { F.ab = !F.ab; zeichneKopf(); zeichneGrid(); } }),
         h('button', { class: 'btn klein' + (F.offen ? ' an' : ''), text: kartenFilterAktiv() || F.el >= 0 ? 'Filter ●' : 'Filter', onclick: () => { F.offen = !F.offen; zeichneKopf(); zeichneGrid(); } }),
@@ -222,7 +280,7 @@ export function sammlungScreen(root) {
     );
   };
   const chipsNeu = () => { const alt = kopf.querySelector('.filter-chips'); const neu = filterChips(F, STANDARD, () => { zeichneKopf(); zeichneGrid(); }); if (alt) alt.replaceWith(neu || h('span')); else if (neu) kopf.append(neu); };
-  const filterBox = () => filterFelder(F, () => { zeichneGrid(); chipsNeu(); });
+  const filterBox = () => filterFelder(F, () => { zeichneGrid(); chipsNeu(); }, { ohne: ['Name'] });
 
   const zeichneGrid = () => {
     const treffer = daten.filter((x) => passt(x));
@@ -260,7 +318,8 @@ export function sammlungScreen(root) {
       const seite = seiteBerechnen(gesamt);
       kacheln = arten.slice(seite * PRO_SEITE.monster, (seite + 1) * PRO_SEITE.monster).map((a) => monsterKachel(a, proArt.get(a.id) || [], beste(a)));
     }
-    grid.replaceChildren(...kacheln);
+    grid.classList.toggle('als-liste', listenAnsicht());
+    grid.replaceChildren(...(listenAnsicht() && kacheln.length ? [listenKopf()] : []), ...kacheln);
     if (!kacheln.length) grid.append(h('p', { class: 'leise', text: S.karten.length ? 'Keine Karten passen zu diesen Filtern.' : 'Noch keine Karten. Öffne zuerst ein paar Packs.' }));
     const t = kopf.querySelector('.treffer');
     if (t) t.textContent = text;
@@ -290,6 +349,10 @@ export function sammlungScreen(root) {
 
   const monsterKachel = (a, liste, best) => {
     const s = S.stapel.get(a.id);
+    if (listenAnsicht()) {
+      if (!best) return h('div', { class: 'karten-zeile leer', html: `<span class="kz-stern"></span><span class="kz-el" style="--el:${farbe(a.el)}">${glyphSVG(a.el)}</span><b>??? <small>#${String(a.id + 1).padStart(3, '0')}</small></b><span>${esc(ELEMENTE[a.el].name)}</span><span>${esc(CONFIG.rollen[a.rolle].name)}</span><span class="leise">noch nicht entdeckt</span>` });
+      return kartenZeile({ ...best, team: liste.some((x) => x.team) }, { onclick: () => kartenPopup(a.id, best.i), extra: `×${liste.length} · ${s.ausf.size} Ausf.`, stern: liste.some((x) => x.fav) ? h('span', { class: 'kz-stern an', text: '★' }) : h('span', { class: 'kz-stern' }) });
+    }
     if (!best) {
       return h('div', { class: 'sm-kachel leer', html: `<div class="sm-silhouette"><span class="siegel-klein" style="--el:${farbe(a.el)}">${glyphSVG(a.el)}</span><b>???</b><small>#${String(a.id + 1).padStart(3, '0')} · ${esc(ELEMENTE[a.el].name)}</small></div>` });
     }
@@ -303,10 +366,11 @@ export function sammlungScreen(root) {
     return k;
   };
   const kartenKachel = (x) => {
+    if (listenAnsicht()) return kartenZeile(x, { onclick: () => kartenPopup(x.art.id, x.i), stern: favStern(x), klasse: 'mit-stern' });
     const k = h('div', { class: 'sm-kachel' });
     k.append(karteElement(x.c, { animiert: false, nurMaus: true }));
     if (x.team) k.append(h('span', { class: 'team-marke', text: 'TEAM' }));
-    if (x.fav) k.append(h('span', { class: 'fav-marke', text: '★', title: 'Favorit' }));
+    k.append(favStern(x));
     k.append(h('div', { class: 'sm-unter', html: `<b>${esc(x.art.name)}</b><span style="color:${stufenFarbe(x.st)}">${esc(CONFIG.seltenheit.kurz[x.st - 1])}</span><span>${ICON.muenze}${fmt(verkaufswert(x.c))}</span>` }));
     k.addEventListener('click', () => kartenPopup(x.art.id, x.i));
     return k;
@@ -341,7 +405,8 @@ export function sammlungScreen(root) {
             knopf.classList.toggle('an', x.fav);
             const vk = knopf.parentElement.querySelector('.verkauf-knopf');
             if (vk) vk.disabled = x.fav || x.team;
-            zeichneGrid();
+            for (const y of daten) if (y.i === x.i) y.fav = x.fav;
+            zeichneFavoriten(); zeichneGrid();
           },
         },
         {
@@ -366,6 +431,7 @@ export function sammlungScreen(root) {
   };
 
   zeichneKopf();
+  zeichneFavoriten();
   zeichneGrid();
   return {};
 }
@@ -417,13 +483,16 @@ export function stapelDetail(artId, nachher) {
   const s = S.stapel.get(artId);
   if (!s || !s.anzahl) return null;
   let auswahl = s.beste, ausfFilter = null, seite = 0;
+  // Suche, Filter und Sortierung auch hier [Nutzer, 24.11.2026: Filter überall, wo Karten angezeigt werden]
+  const SD_STANDARD = { ...STANDARD, sort: 'seltenheit', ab: true, offen: false };
+  const sdF = { ...SD_STANDARD };
   const PRO = 30;
   const links = h('div', { class: 'sd-links' });
   const rechts = h('div', { class: 'sd-rechts' });
   const inhalt = h('div', { class: 'stapel-detail' }, links, rechts);
   const m = modal({ titel: `${esc(a.name)} <small>#${String(a.id + 1).padStart(3, '0')} · ${esc(ELEMENTE[a.el].name)} · ${esc(CONFIG.rollen[a.rolle].name)}</small>`, inhalt, klasse: 'breit', onClose: nachher });
 
-  const alle = () => s.idx.map((i) => ({ i, c: karte(i) })).map((x) => ({ ...x, st: kartenSeltenheit(x.c), sum: staerke(x.c.a), ak: HOLO_STUFEN.indexOf(x.c.holo) * 32 + x.c.looks }));
+  const alle = () => { const team = new Set(S.d.team), fav = new Set(S.d.favoriten); return s.idx.map((i) => { const c = karte(i); return { i, c, art: a, st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: HOLO_STUFEN.indexOf(c.holo) * 32 + c.looks, such: suchText(a, c) }; }); };
   const zeichne = () => {
     if (!s.idx.includes(auswahl)) auswahl = s.beste;
     if (auswahl < 0 || auswahl == null) { m.zu(); return; }
@@ -461,21 +530,31 @@ export function stapelDetail(artId, nachher) {
       const { holo, looks } = ausfuehrungAusKey(k);
       return h('button', { class: 'ausf-chip' + (ausfFilter === k ? ' an' : '') + (holo !== 'keins' ? ' holo-' + holo : ''), onclick: () => { ausfFilter = ausfFilter === k ? null : k; seite = 0; zeichne(); }, html: `${esc(ausfName(holo, looks))} <b>×${n}</b>` });
     });
-    const gefiltert = ausfFilter == null ? liste : liste.filter((x) => x.ak === ausfFilter);
-    gefiltert.sort((x, y) => y.st - x.st || y.c.kl - x.c.kl || y.sum - x.sum || x.i - y.i);
+    const gefiltert = liste.filter((x) => (ausfFilter == null || x.ak === ausfFilter) && passt(x, sdF));
+    const richtung = sdF.ab ? -1 : 1;
+    gefiltert.sort((x, y) => richtung * vergleich(kartenWert(x, sdF), kartenWert(y, sdF)) || y.st - x.st || y.c.kl - x.c.kl || y.sum - x.sum || x.i - y.i);
     const seiten = Math.max(1, Math.ceil(gefiltert.length / PRO));
     seite = Math.min(seite, seiten - 1);
     const zeilen = gefiltert.slice(seite * PRO, (seite + 1) * PRO).map((x) => h('button', {
       class: 'inst-zeile' + (x.i === auswahl ? ' an' : ''), onclick: () => { auswahl = x.i; zeichne(); },
-      html: `<span class="kl-punkt kl-${KLASSEN[x.c.kl].key}"></span><b>${x.sum}</b><span>${KLASSEN[x.c.kl].name}</span><span class="inst-ausf">${esc(ausfName(x.c.holo, x.c.looks))}${S.d.team.includes(x.i) ? ' · Team' : ''}</span><span class="inst-fx">${x.c.fx.length ? '✦'.repeat(x.c.fx.length) : ''}</span><span class="inst-st" style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span>`,
+      html: `<span class="kl-punkt kl-${KLASSEN[x.c.kl].key}"></span><b>${x.sum}</b><span>${KLASSEN[x.c.kl].name}</span><span class="inst-ausf">${x.fav ? '★ ' : ''}${esc(ausfName(x.c.holo, x.c.looks))}${x.team ? ' · Team' : ''}</span><span class="inst-fx">${x.c.fx.length ? '✦'.repeat(x.c.fx.length) : ''}</span><span class="inst-st" style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span>`,
     }));
     rechts.replaceChildren(
       h('h4', { text: `Ausführungen (${s.ausf.size} von ${AUSF_GESAMT})` }),
       h('div', { class: 'ausf-liste' }, ausfChips),
-      h('h4', { text: `Karten (${fmt(gefiltert.length)})` }),
+      h('div', { class: 'kand-leiste sd-leiste' },
+        h('h4', { text: `Karten (${fmt(gefiltert.length)} / ${fmt(liste.length)})` }),
+        suchFeld(sdF, () => { seite = 0; sdF.fokus = true; zeichne(); }, 'Suchen: Klasse, Holo, Effekt …'),
+        h('select', { onchange: (e) => { sdF.sort = e.target.value; zeichne(); } }, SORTEN.filter(([k]) => !['anzahl', 'ausf', 'nr', 'name', 'element', 'rolle'].includes(k)).map(([v, t]) => h('option', { value: v, selected: sdF.sort === v, text: t }))),
+        h('button', { class: 'btn klein', text: sdF.ab ? '↓' : '↑', title: sdF.ab ? 'absteigend' : 'aufsteigend', onclick: () => { sdF.ab = !sdF.ab; zeichne(); } }),
+        h('button', { class: 'btn klein' + (sdF.offen ? ' an' : ''), text: 'Filter', onclick: () => { sdF.offen = !sdF.offen; zeichne(); } })),
+      sdF.offen ? filterFelder(sdF, () => { seite = 0; zeichne(); }, { ohne: ['Name', 'Element', 'Rolle', 'Bauplan', 'Entwicklung', 'Monster'] }) : '',
+      filterChips(sdF, SD_STANDARD, () => { seite = 0; zeichne(); }) || '',
       h('div', { class: 'inst-liste' }, zeilen),
       seiten > 1 ? h('div', { class: 'seiten' }, h('button', { class: 'btn klein', disabled: seite === 0, text: '‹', onclick: () => { seite--; zeichne(); } }), h('span', { text: `${seite + 1} / ${seiten}` }), h('button', { class: 'btn klein', disabled: seite >= seiten - 1, text: '›', onclick: () => { seite++; zeichne(); } })) : null,
     );
+    // Suchfeld wird neu gezeichnet: Fokus und Cursor zurückgeben
+    if (sdF.fokus) { const i = rechts.querySelector('.such-feld'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } sdF.fokus = false; }
   };
   zeichne();
   return m;

@@ -8,7 +8,7 @@ import { ARTEN } from '../species.js';
 const ROLLEN = Object.keys(CONFIG.rollen);
 import { staerke, kosten, plaetzeBelegt, plaetzeBringt } from '../rules.js';
 import { h, toast, fmt, ICON } from './dom.js';
-import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips } from './sammlung.js';
+import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips, suchFeld, listenAnsicht, ansichtUmschalter, kartenZeile, listenKopf } from './sammlung.js';
 
 // Eigene Filter für den Teambildschirm (gleiche Möglichkeiten wie im Album)
 const T_STANDARD = { ...FILTER_STANDARD, team: 'nicht', sort: 'staerke', ab: true, offen: false };
@@ -20,6 +20,10 @@ const STRATEGIEN = [
 ];
 const TEAM_SORTEN = SORTEN.filter(([k]) => !['anzahl', 'ausf'].includes(k));
 const PRO_SEITE = 24;
+// Ansicht „Dein Team“: eigene Suche, Filter und Sortierung [Nutzer, 24.11.2026: nach Rolle und Stärke sortieren]
+const TEAM_ANSICHT_STANDARD = { ...FILTER_STANDARD, sort: 'rolle-staerke', ab: true, offen: false };
+const teamF = { ...TEAM_ANSICHT_STANDARD };
+const TEAM_ANSICHT_SORTEN = [['rolle-staerke', 'Rolle, dann Stärke'], ['staerke', 'Stärke'], ...SORTEN.filter(([k]) => !['anzahl', 'ausf', 'staerke', 'nr'].includes(k))];
 const filterAktiv = () => Object.keys(T_STANDARD).some((k) => !['sort', 'ab', 'offen', 'seite'].includes(k) && filter[k] !== T_STANDARD[k]);
 
 export function teamScreen(root, nav) {
@@ -30,7 +34,8 @@ export function teamScreen(root, nav) {
   const kand = h('div', { class: 'kand-grid' });
   const seitenLeiste = h('div', { class: 'seiten' });
   const bauLeiste = h('div', { class: 'team-bau' });
-  wrap.append(kopf, h('div', { class: 'panel' }, h('h3', { text: 'Team bauen' }), bauLeiste), h('div', { class: 'panel' }, h('h3', { text: 'Dein Team' }), teamReihe), h('div', { class: 'panel' }, kandKopf, kand, seitenLeiste));
+  const teamKopf = h('div', { class: 'kand-kopf' });
+  wrap.append(kopf, h('div', { class: 'panel' }, h('h3', { text: 'Team bauen' }), bauLeiste), h('div', { class: 'panel' }, teamKopf, teamReihe), h('div', { class: 'panel' }, kandKopf, kand, seitenLeiste));
   let daten = datenLaden();
   let treffer = [];
 
@@ -66,6 +71,7 @@ export function teamScreen(root, nav) {
   root.append(wrap);
 
   const mini = (i, beiKlick, extra = '') => {
+    if (listenAnsicht()) { const x = daten[i] || datenLaden()[i]; return kartenZeile(x, { onclick: () => beiKlick(i), klasse: extra }); }
     const c = karte(i);
     const el = karteElement(c, { animiert: false, nurMaus: true });
     const box = h('div', { class: 'team-karte ' + extra }, el, h('div', { class: 'tk-info', html: `<span data-tip="Beschwörungskosten">${ICON.beschwoerung}${kosten(c)}</span><span data-tip="Belegte Teamplätze">▣ ${plaetzeBelegt(c)}</span>${plaetzeBringt(c) ? `<span class="gut" data-tip="Bringt Teamplätze mit">+${plaetzeBringt(c)}</span>` : ''}` }));
@@ -104,13 +110,45 @@ export function teamScreen(root, nav) {
       h('p', { class: 'leise', text: `Jede Karte belegt so viele Plätze wie ihr Teamplatz-Wert (mindestens 1). Grundvorrat ${CONFIG.kampf.teamGrundplaetze}, Karten mit Teamkapazität bringen weitere Plätze mit. Teamplatz wirkt als Angriffsmultiplikator.` }),
     );
     bauLeiste.replaceChildren(...bauFelder());
-    // Nach Rollen sortiert und gruppiert [Nutzer, 24.11.2026], innerhalb der Rolle nach Stärke
-    const entfernen = (j) => { teamSetzen(S.d.team.filter((x) => x !== j)); zeichne(); };
-    const gruppen = ROLLEN.map((r) => ({ r, karten: S.d.team.filter((i) => ARTEN[karte(i).art].rolle === r).sort((x, y) => staerke(karte(y).a) - staerke(karte(x).a)) })).filter((g) => g.karten.length);
-    teamReihe.replaceChildren(...(S.d.team.length ? gruppen.map((g) => h('div', { class: 'rollen-gruppe' },
-      h('h4', { text: `${CONFIG.rollen[g.r].name} · ${g.karten.length}` }),
-      h('div', { class: 'rollen-karten' }, g.karten.map((i) => mini(i, entfernen, 'im-team'))))) : [h('p', { class: 'leise', text: 'Noch leer. Tippe unten Karten an oder stelle automatisch auf.' })]));
+    zeichneTeamKopf();
+    zeichneTeam();
     zeichneKandidaten();
+  };
+
+  // „Dein Team“: Standard nach Rolle gruppiert und innerhalb nach Stärke, sonst jede Sortierung; Suche und Filter
+  const zeichneTeamKopf = () => {
+    teamKopf.replaceChildren(
+      h('div', { class: 'kand-leiste' },
+        h('h3', { text: 'Dein Team' }),
+        suchFeld(teamF, () => { zeichneTeam(); teamChips(); }, 'Im Team suchen …'),
+        h('select', { onchange: (e) => { teamF.sort = e.target.value; zeichneTeam(); } }, TEAM_ANSICHT_SORTEN.map(([v, t]) => h('option', { value: v, selected: teamF.sort === v, text: t }))),
+        h('button', { class: 'btn klein', text: teamF.ab ? '↓ absteigend' : '↑ aufsteigend', onclick: () => { teamF.ab = !teamF.ab; zeichneTeamKopf(); zeichneTeam(); } }),
+        h('button', { class: 'btn klein' + (teamF.offen ? ' an' : ''), text: 'Filter', onclick: () => { teamF.offen = !teamF.offen; zeichneTeamKopf(); } }),
+        ansichtUmschalter(() => zeichne()),
+        h('span', { class: 'treffer team-treffer' })),
+      teamF.offen ? filterFelder(teamF, () => { zeichneTeam(); teamChips(); }, { ohne: ['Name', 'Team', 'Monster'] }) : '',
+      filterChips(teamF, TEAM_ANSICHT_STANDARD, () => { zeichneTeamKopf(); zeichneTeam(); }) || '',
+    );
+  };
+  const teamChips = () => { const alt = teamKopf.querySelector('.filter-chips'); const neu = filterChips(teamF, TEAM_ANSICHT_STANDARD, () => { zeichneTeamKopf(); zeichneTeam(); }); if (alt) alt.replaceWith(neu || h('span')); else if (neu) teamKopf.append(neu); };
+  const zeichneTeam = () => {
+    const entfernen = (j) => { teamSetzen(S.d.team.filter((x) => x !== j)); zeichne(); };
+    const imTeam = new Set(S.d.team);
+    const liste = daten.filter((x) => imTeam.has(x.i) && passt({ ...x, team: true }, { ...teamF, team: 'alle' }));
+    const richtung = teamF.ab ? -1 : 1;
+    const t = teamKopf.querySelector('.team-treffer');
+    if (t) t.textContent = `${liste.length} / ${S.d.team.length} Karten`;
+    if (!S.d.team.length) { teamReihe.replaceChildren(h('p', { class: 'leise', text: 'Noch leer. Tippe unten Karten an oder stelle automatisch auf.' })); return; }
+    if (!liste.length) { teamReihe.replaceChildren(h('p', { class: 'leise', text: 'Keine Teamkarte passt zu Suche oder Filter.' })); return; }
+    if (teamF.sort === 'rolle-staerke') {
+      const gruppen = ROLLEN.map((r) => ({ r, karten: liste.filter((x) => x.art.rolle === r).sort((x, y) => richtung * (x.sum - y.sum)) })).filter((g) => g.karten.length);
+      teamReihe.replaceChildren(...gruppen.map((g) => h('div', { class: 'rollen-gruppe' },
+        h('h4', { text: `${CONFIG.rollen[g.r].name} · ${g.karten.length} · Stärke ${g.karten.reduce((s, x) => s + x.sum, 0)}` }),
+        h('div', { class: 'rollen-karten' + (listenAnsicht() ? ' als-liste' : '') }, ...(listenAnsicht() ? [listenKopf()] : []), ...g.karten.map((x) => mini(x.i, entfernen, 'im-team'))))));
+      return;
+    }
+    liste.sort((a, b) => richtung * vergleich(kartenWert(a, teamF), kartenWert(b, teamF)) || a.i - b.i);
+    teamReihe.replaceChildren(h('div', { class: 'rollen-karten' + (listenAnsicht() ? ' als-liste' : '') }, ...(listenAnsicht() ? [listenKopf()] : []), ...liste.map((x) => mini(x.i, entfernen, 'im-team'))));
   };
 
   const chipsNeu = () => { const alt = kandKopf.querySelector('.filter-chips'); const neu = filterChips(filter, T_STANDARD, zeichneKandidaten); if (alt) alt.replaceWith(neu || h('span')); else if (neu) kandKopf.append(neu); };
@@ -119,12 +157,13 @@ export function teamScreen(root, nav) {
     kandKopf.replaceChildren(
       h('div', { class: 'kand-leiste' },
         h('h3', { text: 'Sammlung' }),
+        suchFeld(filter, () => { nurListe(); chipsNeu(); }),
         h('select', { onchange: (e) => { filter.sort = e.target.value; filter.seite = 0; nurListe(); } }, TEAM_SORTEN.map(([v, t]) => h('option', { value: v, selected: filter.sort === v, text: t }))),
         h('button', { class: 'btn klein', text: filter.ab ? '↓ absteigend' : '↑ aufsteigend', onclick: () => { filter.ab = !filter.ab; zeichneKandidaten(); } }),
         h('button', { class: 'btn klein' + (filter.offen ? ' an' : ''), text: filterAktiv() ? 'Filter ●' : 'Filter', onclick: () => { filter.offen = !filter.offen; zeichneKandidaten(); } }),
         h('button', { class: 'btn klein', text: 'Zurücksetzen', onclick: () => { Object.assign(filter, { ...T_STANDARD, offen: filter.offen }); zeichneKandidaten(); } }),
         h('span', { class: 'treffer' })),
-      filter.offen ? filterFelder(filter, () => { nurListe(); chipsNeu(); const k = kandKopf.querySelector('.kand-leiste .btn.an'); if (k) k.textContent = filterAktiv() ? 'Filter ●' : 'Filter'; }, { ohne: ['Team', 'Monster'] }) : '',
+      filter.offen ? filterFelder(filter, () => { nurListe(); chipsNeu(); const k = kandKopf.querySelector('.kand-leiste .btn.an'); if (k) k.textContent = filterAktiv() ? 'Filter ●' : 'Filter'; }, { ohne: ['Name', 'Team', 'Monster'] }) : '',
       filterChips(filter, T_STANDARD, zeichneKandidaten) || '',
     );
     nurListe();
@@ -138,7 +177,8 @@ export function teamScreen(root, nav) {
     if (t) t.textContent = `${fmt(treffer.length)} Karten`;
     const seiten = Math.max(1, Math.ceil(treffer.length / PRO_SEITE));
     filter.seite = Math.min(filter.seite, seiten - 1);
-    kand.replaceChildren(...treffer.slice(filter.seite * PRO_SEITE, (filter.seite + 1) * PRO_SEITE).map((x) => mini(x.i, (j) => {
+    kand.classList.toggle('als-liste', listenAnsicht());
+    kand.replaceChildren(...(listenAnsicht() && treffer.length ? [listenKopf()] : []), ...treffer.slice(filter.seite * PRO_SEITE, (filter.seite + 1) * PRO_SEITE).map((x) => mini(x.i, (j) => {
       const neuTeam = [...S.d.team, j];
       const p = teamPlaetze(neuTeam);
       if (!p.ok) { toast(`Zu wenig Teamplätze (${p.belegt} / ${p.gesamt}).`); return; }

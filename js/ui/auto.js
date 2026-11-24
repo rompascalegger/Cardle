@@ -6,6 +6,11 @@ import { Sound } from '../audio.js';
 import { ARTEN } from '../species.js';
 import { h, toast, ICON, fmt } from './dom.js';
 import { karteVergroessern } from './lupe.js';
+import { FILTER_STANDARD, passt, filterFelder, filterChips, suchFeld, fundDaten } from './sammlung.js';
+
+// Suche und Filter für die Fundliste [Nutzer, 24.11.2026: Filter überall, wo Karten angezeigt werden]
+const FEED_STANDARD = { ...FILTER_STANDARD, offen: false };
+const feedF = { ...FEED_STANDARD };
 
 // [VORSCHLAG 11.3] Besondere Funde werden gezeigt. Ab Werk läuft das Auto-Öffnen danach von selbst weiter (keine Eingaben nötig).
 // "Neues Monster" und Holo sind ab Werk aus: Bei 640 Arten bzw. 15 % Holo je Pack käme sonst ständig eine Unterbrechung.
@@ -70,7 +75,14 @@ export function autoScreen(root) {
   const histo = h('div', { class: 'auto-histo' });
   const feed = h('div', { class: 'auto-feed' });
   const fundBox = h('div', { class: 'panel fund-buehne', hidden: true });
-  rechts.append(fundBox, h('div', { class: 'panel' }, band, zaehler), h('div', { class: 'panel' }, h('h3', { text: 'Diese Sitzung' }), histo), h('div', { class: 'panel' }, h('h3', { text: 'Besondere Funde' }), feed));
+  const feedKopf = h('div', { class: 'kand-kopf' });
+  rechts.append(fundBox, h('div', { class: 'panel' }, band, zaehler), h('div', { class: 'panel' }, h('h3', { text: 'Diese Sitzung' }), histo), h('div', { class: 'panel' }, feedKopf, feed));
+  const zeichneFeedKopf = () => feedKopf.replaceChildren(
+    h('div', { class: 'kand-leiste' }, h('h3', { text: 'Besondere Funde' }), suchFeld(feedF, () => { zeichneFeed(); feedChips(); }, 'Funde durchsuchen …'),
+      h('button', { class: 'btn klein' + (feedF.offen ? ' an' : ''), text: 'Filter', onclick: () => { feedF.offen = !feedF.offen; zeichneFeedKopf(); } })),
+    feedF.offen ? filterFelder(feedF, () => { zeichneFeed(); feedChips(); }, { ohne: ['Name', 'Team', 'Monster', 'Favoriten'] }) : '',
+    filterChips(feedF, FEED_STANDARD, () => { zeichneFeedKopf(); zeichneFeed(); }) || '');
+  const feedChips = () => { const alt = feedKopf.querySelector('.filter-chips'); const neu = filterChips(feedF, FEED_STANDARD, () => { zeichneFeedKopf(); zeichneFeed(); }); if (alt) alt.replaceWith(neu || h('span')); else if (neu) feedKopf.append(neu); };
 
   const zeichne = () => {
     const t = CONFIG.autoOeffnen.stufen[einst.autoTempo];
@@ -87,15 +99,17 @@ export function autoScreen(root) {
 <div class="kl-zeile">${KLASSEN.map((k, i) => `<span class="kl-chip kl-${k.key}">${k.name} <b>${fmt(sitzung.klassen[i])}</b></span>`).join('')}</div>`;
   };
   const zeichneFeed = () => {
-    feed.replaceChildren(...sitzung.feed.slice(-16).reverse().map((e) => {
+    const passend = sitzung.feed.filter((e) => passt(fundDaten(e.karte), feedF));
+    feed.replaceChildren(...passend.slice(-16).reverse().map((e) => {
       const el = karteElement(e.karte, { animiert: false, nurMaus: true });
       el.classList.add('mini');
       el.addEventListener('click', () => karteVergroessern(e.karte));
       return el;
     }));
+    if (sitzung.feed.length && !passend.length) feed.append(h('p', { class: 'leise', text: 'Kein Fund passt zu Suche oder Filter.' }));
     if (!sitzung.feed.length) feed.append(h('p', { class: 'leise', text: 'Noch nichts Besonderes. Holo, Looks, Effekte, neue Monster und Klassen ab Emerald erscheinen hier. Klick auf eine Karte vergrößert sie.' }));
   };
-  zeichne(); zeichneFeed();
+  zeichne(); zeichneFeedKopf(); zeichneFeed();
 
   // Welche Karten eines Packs sind ein Fund? Gibt den Grund und die Karten (Indizes) zurück.
   const pruefeFund = (pack) => {

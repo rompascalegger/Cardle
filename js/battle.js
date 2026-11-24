@@ -12,7 +12,7 @@ const ATTR_WACHSTUM = ['kraft', 'schutz', 'groesse', 'wildheit', 'seltsamkeit', 
 export function neueEinheit(c, seite, rng) {
   const art = ARTEN[c.art];
   const u = {
-    uid: ++uidZaehler, seite, c, art: c.art, name: art.name,
+    uid: ++uidZaehler, seite, c, art: c.art, name: c.spitzname || art.name, artName: art.name, spitzname: c.spitzname || null,
     el: art.el, elZug: art.el,
     a: { ...c.a }, basis: staerke(c.a), schaden: 0,
     fx: c.fx.map((id) => EFFEKT[id].key), kopie: null,

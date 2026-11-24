@@ -66,6 +66,8 @@ function neuerStand() {
     karten: '', // kodierte Karten, ';'-getrennt
     team: [],
     favoriten: [], // Kartenindizes, nie verkaufbar [Spielerfeedback 24.11.2026]
+    tags: {}, // Kartenindex → Farb-Tag 0–9 [Nutzer, 24.11.2026]
+    spitznamen: {}, // Kartenindex → Spitzname, im Kampf statt des Monsternamens [Nutzer, 24.11.2026]
     teamSlots: Array.from({ length: CONFIG.kampf.teamSlots }, (_, n) => ({ name: `Team ${n + 1}`, team: [] })), // gespeicherte Teams, aktives = S.d.team
     teamSlot: 0,
     kampagne: { v: CONFIG.kampagne.version, fortschritt: {}, siege: 0, niederlagen: 0 },
@@ -163,6 +165,8 @@ export async function laden() {
   S.d.effekteEntdeckt = S.d.effekteEntdeckt || {};
   for (const code of S.karten) effekteMerken(dekodiere(code));
   S.d.favoriten = (S.d.favoriten || []).filter((i) => i < S.karten.length);
+  S.d.spitznamen = Object.fromEntries(Object.entries(S.d.spitznamen || {}).filter(([i, n]) => Number(i) < S.karten.length && n));
+  S.d.tags = Object.fromEntries(Object.entries(S.d.tags || {}).filter(([i, t]) => Number(i) < S.karten.length && t >= 0 && t < CONFIG.tags.length));
   if (!Array.isArray(S.d.teamSlots)) S.d.teamSlots = [];
   while (S.d.teamSlots.length < CONFIG.kampf.teamSlots) S.d.teamSlots.push({ name: `Team ${S.d.teamSlots.length + 1}`, team: [] });
   S.d.teamSlot = Math.min(S.d.teamSlot || 0, S.d.teamSlots.length - 1);
@@ -384,6 +388,8 @@ export function verkaufen(indizes) {
   const umrechnen = (liste) => liste.map((i) => umrechnung.get(i)).filter((i) => i != null);
   S.d.team = umrechnen(S.d.team);
   S.d.favoriten = umrechnen(S.d.favoriten);
+  S.d.spitznamen = Object.fromEntries(Object.entries(S.d.spitznamen || {}).map(([i, n]) => [umrechnung.get(Number(i)), n]).filter(([i]) => i != null));
+  S.d.tags = Object.fromEntries(Object.entries(S.d.tags || {}).map(([i, t]) => [umrechnung.get(Number(i)), t]).filter(([i]) => i != null));
   for (const sl of S.d.teamSlots) sl.team = umrechnen(sl.team);
   S.d.muenzen += muenzen;
   S.d.stat.verkauft = (S.d.stat.verkauft || 0) + weg.size;
@@ -498,6 +504,26 @@ export function teamSlotUmbenennen(n, name) {
   if (!sl) return;
   sl.name = String(name).trim().slice(0, 24) || `Team ${n + 1}`;
   aenderung('team');
+  speichernBald();
+}
+// Spitznamen: höchstens 18 Zeichen, leer = entfernen
+export const SPITZNAME_MAX = 18;
+export const spitzname = (i) => S.d.spitznamen?.[i] || '';
+export function spitznameSetzen(i, name) {
+  const n = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, SPITZNAME_MAX);
+  S.d.spitznamen = S.d.spitznamen || {};
+  if (n) S.d.spitznamen[i] = n; else delete S.d.spitznamen[i];
+  aenderung('sammlung');
+  speichernBald();
+  return n;
+}
+// Karte mit Spitzname (für den Kampf)
+export const karteMitName = (i) => { const c = karte(i); const n = spitzname(i); if (n) c.spitzname = n; return c; };
+export const tagVon = (i) => S.d.tags?.[i] ?? null;
+export function tagSetzen(i, t) {
+  S.d.tags = S.d.tags || {};
+  if (t == null || t < 0) delete S.d.tags[i]; else S.d.tags[i] = t;
+  aenderung('sammlung');
   speichernBald();
 }
 export const istFavorit = (i) => S.d.favoriten.includes(i);

@@ -1,6 +1,6 @@
 // Kampagne (Welten, Bosse) und Kampfansicht. [FEST 12] automatischer Kampf, Beschwörung, 5 Leben.
 import { CONFIG, KLASSEN } from '../config.js';
-import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
+import { S, karte, karteMitName, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, teamSlotWaehlen } from '../state.js';
 import { SORTEN, kartenWert, vergleich, fundDaten } from './sammlung.js';
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
@@ -313,7 +313,7 @@ export function kampfScreen(root, nav, { id, daily = null }) {
   if (!k || !eigenTeam.length) { nav(daily != null ? 'daily' : 'kampagne'); return {}; }
   const kw = daily != null ? { einkommen: k.einkommen, startBank: k.startBank } : kampfWerte(k, fortschritt);
   const b = neuerKampf({
-    spielerKarten: eigenTeam.map(karte), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
+    spielerKarten: eigenTeam.map(karteMitName), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
     rng: new Rng(`${S.d.seed}:${k.id}:${S.d.stat.packs}:${S.d.kampagne.siege + S.d.kampagne.niederlagen}`),
     gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank,
   });
@@ -373,7 +373,7 @@ export function kampfScreen(root, nav, { id, daily = null }) {
       return `<div class="kfi-fx" style="--fxc:${ES.farben[st - 1]}"><b>${e.blitz ? '⚡' : '✦'} ${esc(e.name)}</b> <i>${ES.namen[st - 1]} · ${status}</i><div>${esc(effektText(e.id, st))}</div></div>`;
     }).join('');
     const z = (key, name, wert) => `<span>${attrIcon(key)} ${name} <b>${wert}</b></span>`;
-    infoBox.innerHTML = `<div class="kfi-kopf"><b>${esc(u.name)}</b><span>${u.seite ? 'Gegner' : 'Du'} · ${esc(ELEMENTE[el].name)} · ${esc(CONFIG.rollen[ARTEN[u.art].rolle].name)} · ${KLASSEN[u.c.kl].name}</span></div>
+    infoBox.innerHTML = `<div class="kfi-kopf"><b>${esc(u.name)}${u.spitzname ? ` <small>(${esc(u.artName)})</small>` : ''}</b><span>${u.seite ? 'Gegner' : 'Du'} · ${esc(ELEMENTE[el].name)} · ${esc(CONFIG.rollen[ARTEN[u.art].rolle].name)} · ${KLASSEN[u.c.kl].name}</span></div>
 <div class="kfi-zeile"><span>Leben <b>${versteckt ? '?' : `${fmt1(Math.max(0, rest))}/${max}`}</b></span><span>Kosten <b>${ICON.beschwoerung}${kosten}</b></span>${w.mult > 1 ? `<span>Angriff <b>×${zahl(w.mult)}</b></span>` : ''}</div>
 <div class="kfi-werte">${z('kraft', 'Kraft', w.kraft)}${z('schutz', 'Schutz', w.schutz)}${z('schlagzahl', 'Schläge', w.schlag)}${z('wildheit', 'Wildheit', w.wild)}${z('groesse', 'Größe', w.groesse)}${z('seltsamkeit', 'Seltsamkeit', w.selt)}${u.a.heilung ? z('heilung', 'Heilung', u.a.heilung) : ''}</div>
 ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}

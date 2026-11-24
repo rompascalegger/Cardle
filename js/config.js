@@ -9,7 +9,7 @@
 // Alles, was Balancing ist, steht hier. Der übrige Code liest nur diese Werte.
 
 // Versionskennung, oben in der Hilfe angezeigt. Bei jedem Release hochzählen (Datum + Buchstabe für mehrere am Tag).
-export const VERSION = { kennung: '2026.11.24g', stand: '24.11.2026', notiz: 'Kampf: Hand-Sortierung, Effekte und Hover-Infos, Friedhof, Wiederbelebung repariert' };
+export const VERSION = { kennung: '2026.11.24h', stand: '24.11.2026', notiz: 'Spitznamen und Farb-Tags für Karten' };
 
 export const CONFIG = {
   spielname: 'Cardle', // [OFFEN] Platzhalter, Arbeitsname (Manifest 1.2)
@@ -68,6 +68,11 @@ export const CONFIG = {
   holo: { reverse: 0.01, holo: 0.005, secret: 0.001, ghost: 0.0002 }, // [FEST] Chance pro Karte, schließen sich aus. Ghost Rare [Nutzer, 21.11.2026]: neue, seltenste Holo-Stufe
   lookChance: 0.005, // [FEST] je Zusatzlook, unabhängig
 
+  // Farb-Tags für Karten [Nutzer, 24.11.2026]: 10 Farben, eine je Karte
+  tags: [
+    { name: 'Rot', farbe: '#ff4d5e' }, { name: 'Orange', farbe: '#ff9a3d' }, { name: 'Gelb', farbe: '#ffd447' }, { name: 'Grün', farbe: '#3ddc84' }, { name: 'Türkis', farbe: '#2fd5d0' },
+    { name: 'Blau', farbe: '#3d9bff' }, { name: 'Violett', farbe: '#b066ff' }, { name: 'Pink', farbe: '#ff6fd0' }, { name: 'Braun', farbe: '#b0794a' }, { name: 'Grau', farbe: '#9aa3b2' },
+  ],
   // Effekt-Seltenheit [Nutzer, 24.11.2026]: Stufe 1–5, kostet +Stufe Beschwörungspunkte. Neue Effekte wirken je Stufe stärker (bis ×5).
   effektStufen: {
     namen: ['Gewöhnlich', 'Selten', 'Episch', 'Legendär', 'Mythisch'],

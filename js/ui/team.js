@@ -75,6 +75,9 @@ export function teamScreen(root, nav) {
     const c = karte(i);
     const el = karteElement(c, { animiert: false, nurMaus: true });
     const box = h('div', { class: 'team-karte ' + extra }, el, h('div', { class: 'tk-info', html: `<span data-tip="Beschwörungskosten">${ICON.beschwoerung}${kosten(c)}</span><span data-tip="Belegte Teamplätze">▣ ${plaetzeBelegt(c)}</span>${plaetzeBringt(c) ? `<span class="gut" data-tip="Bringt Teamplätze mit">+${plaetzeBringt(c)}</span>` : ''}` }));
+    const tg = S.d.tags?.[i];
+    if (tg != null) box.append(h('span', { class: 'tag-marke', style: `--tag:${CONFIG.tags[tg].farbe}`, title: `Tag: ${CONFIG.tags[tg].name}` }));
+    if (S.d.spitznamen?.[i]) box.querySelector('.tk-info')?.prepend(h('b', { class: 'tk-nick', text: `„${S.d.spitznamen[i]}“` }));
     box.addEventListener('click', () => beiKlick(i));
     return box;
   };

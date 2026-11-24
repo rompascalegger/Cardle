@@ -948,3 +948,15 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .kf-friedhof .einheit.tot:hover { filter: grayscale(.3) brightness(.95); }
 .eh-tod { font-size: .62rem; text-align: center; color: #ffb3c0; font-weight: 800; }
 .kfi-werte svg, .kfi-zeile svg { width: 14px; height: 14px; flex: none; }
+
+/* Farb-Tags [Nutzer, 24.11.2026] */
+.tag-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--tag); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .5), 0 0 6px var(--tag); margin-right: 5px; vertical-align: middle; font-style: normal; }
+.tag-punkt.gross { width: 20px; height: 20px; margin: 0; }
+.tag-marke { position: absolute; top: -8px; left: 24px; z-index: 6; width: 18px; height: 18px; border-radius: 50%; background: var(--tag); border: 2px solid rgba(10, 6, 24, .85); box-shadow: 0 0 8px var(--tag); pointer-events: none; }
+.tag-wahl { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.tag-knopf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--rand); background: var(--panel2); color: var(--text); cursor: pointer; font: 700 .88rem var(--f-ui); }
+.tag-knopf:hover { border-color: var(--tag, #fff); }
+.tag-knopf.an { border-color: var(--tag, #ffd447); box-shadow: 0 0 0 2px var(--tag, #ffd447); }
+.tag-knopf.kein { justify-content: center; color: var(--leise); }
+.team-karte { position: relative; } .tk-nick { color: #ffd447; margin-right: 4px; }
+.sm-kopf > .sm-filterbox, .sm-kopf > .filter-chips, .sm-kopf > .sm-leiste { flex: 1 1 100%; width: 100%; }

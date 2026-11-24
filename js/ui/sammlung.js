@@ -1,7 +1,7 @@
 // Album: Stapel je Monster oder alle Einzelkarten, mit Filtern und Sortierung für jede Eigenschaft.
 // Ausführungen (Holo × Looks) [FEST 11], Looks ab- und auftragen mit Staub, doppelte schwache Karten verkaufen.
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN, HOLO_STUFEN } from '../config.js';
-import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald } from '../state.js';
+import { S, karte, lookAbtragen, lookAuftragen, verkaufen, doppelteFinden, wertVon, favoritUmschalten, speichernBald, spitzname, spitznameSetzen, SPITZNAME_MAX, tagVon, tagSetzen } from '../state.js';
 import { karteElement, stufenFarbe, stufenName, esc } from '../cardview.js';
 import { ELEMENTE, glyphSVG, farbe } from '../elements.js';
 import { ATTRIBUTE } from '../attributes.js';
@@ -14,7 +14,7 @@ import { karteVergroessern } from './lupe.js';
 
 const STANDARD = {
   ansicht: 'monster', suche: '', el: -1, klMin: 0, klMax: 7, stufeMin: 1, holo: 'alle', look: 'alle', fx: 'alle',
-  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, fav: 'alle', team: 'alle', besitz: 'alle',
+  rolle: 'alle', bauplan: 'alle', form: -1, attr: 'kraft', attrMin: 0, staerkeMin: 0, kostenMax: 0, fav: 'alle', tag: 'alle', team: 'alle', besitz: 'alle',
   sort: 'nr', ab: false, seite: 0, offen: false,
 };
 const F = { ...STANDARD };
@@ -58,7 +58,8 @@ export function datenLaden() {
   return S.karten.map((code, i) => {
     const c = dekodiere(code);
     const art = ARTEN[c.art];
-    return { i, c, art, st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: ausfuehrungsKey(c), such: suchText(art, c) };
+    const nick = S.d.spitznamen?.[i] || '';
+    return { i, c, art, nick, tag: S.d.tags?.[i] ?? null, st: kartenSeltenheit(c), sum: staerke(c.a), kost: kosten(c), team: team.has(i), fav: fav.has(i), ak: ausfuehrungsKey(c), such: suchText(art, c) + (nick ? ' ' + nick.toLowerCase() : '') };
   });
 }
 
@@ -87,9 +88,12 @@ export function passt(x, F = ALBUM_F) {
   if (F.team === 'nicht' && x.team) return false;
   if (F.fav === 'nur' && !x.fav) return false;
   if (F.fav === 'ohne' && x.fav) return false;
+  if (F.tag === 'ohne' && x.tag != null) return false;
+  if (F.tag === 'mit' && x.tag == null) return false;
+  if (/^\d$/.test(F.tag) && x.tag !== Number(F.tag)) return false;
   return true;
 }
-const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team', 'fav'].some((k) => F[k] !== STANDARD[k]);
+const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team', 'fav', 'tag'].some((k) => F[k] !== STANDARD[k]);
 
 export const SORTEN = [
   ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['rolle', 'Rolle'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
@@ -155,10 +159,36 @@ export function kartenZeile(x, { onclick, extra = '', stern = null, klasse = '' 
   const c = x.c;
   const fx = c.fx.map((id, i) => { const st = c.fxs?.[i] || 1; const e = EFFEKTE.find((q) => q.id === id); return `<i style="color:${CONFIG.effektStufen.farben[st - 1]}" title="${esc(e?.name || '')}">${e?.blitz ? '⚡' : '✦'}</i>`; }).join('');
   const z = h('div', { class: `karten-zeile kl-${KLASSEN[c.kl].key} ${klasse}`, tabindex: 0, role: 'button',
-    html: `<span class="kz-el" style="--el:${farbe(x.art.el)}">${glyphSVG(x.art.el)}</span><b>${esc(x.art.name)}${x.team ? ' <em class="kz-team">TEAM</em>' : ''}${extra ? ` <small>${esc(extra)}</small>` : ''}</b><span>${esc(ELEMENTE[x.art.el].name)}</span><span>${esc(CONFIG.rollen[x.art.rolle].name)}</span><span class="kz-kl"><i class="kl-punkt kl-${KLASSEN[c.kl].key}"></i>${KLASSEN[c.kl].name}</span><span><b>${x.sum}</b></span><span>${ICON.beschwoerung}${x.kost}</span><span style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span><span class="kz-fx">${fx || '–'}</span><span>${esc(ausfName(c.holo, c.looks))}</span>` });
+    html: `<span class="kz-el" style="--el:${farbe(x.art.el)}">${glyphSVG(x.art.el)}</span><b>${x.tag != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[x.tag].farbe}" title="Tag: ${CONFIG.tags[x.tag].name}"></i>` : ''}${x.nick ? `„${esc(x.nick)}“ <small>${esc(x.art.name)}</small>` : esc(x.art.name)}${x.team ? ' <em class="kz-team">TEAM</em>' : ''}${extra ? ` <small>${esc(extra)}</small>` : ''}</b><span>${esc(ELEMENTE[x.art.el].name)}</span><span>${esc(CONFIG.rollen[x.art.rolle].name)}</span><span class="kz-kl"><i class="kl-punkt kl-${KLASSEN[c.kl].key}"></i>${KLASSEN[c.kl].name}</span><span><b>${x.sum}</b></span><span>${ICON.beschwoerung}${x.kost}</span><span style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span><span class="kz-fx">${fx || '–'}</span><span>${esc(ausfName(c.holo, c.looks))}</span>` });
   z.prepend(stern || h('span', { class: 'kz-stern' }));
   if (onclick) { z.addEventListener('click', onclick); z.addEventListener('keydown', (e) => { if (e.key === 'Enter') onclick(e); }); }
   return z;
+}
+
+// Farb-Tag wählen [Nutzer, 24.11.2026]: 10 Farben oder kein Tag
+export function tagWahl(i, fertig) {
+  const jetzt = tagVon(i);
+  const waehle = (t) => { tagSetzen(i, t); m.zu(); fertig && fertig(t); };
+  const m = modal({
+    titel: 'Tag wählen',
+    inhalt: h('div', { class: 'tag-wahl' },
+      ...CONFIG.tags.map((t, n) => h('button', { class: 'tag-knopf' + (jetzt === n ? ' an' : ''), style: `--tag:${t.farbe}`, title: t.name, onclick: () => waehle(n) }, h('i', { class: 'tag-punkt gross' }), h('span', { text: t.name }))),
+      h('button', { class: 'tag-knopf kein' + (jetzt == null ? ' an' : ''), onclick: () => waehle(null) }, h('span', { text: 'Kein Tag' }))),
+  });
+}
+
+// Spitzname setzen [Nutzer, 24.11.2026]: im Kampf erscheint er statt des Monsternamens
+export function spitznameDialog(i, fertig) {
+  const c = karte(i);
+  const eingabe = h('input', { type: 'text', class: 'such-feld spitzname-feld', maxlength: SPITZNAME_MAX, value: spitzname(i), placeholder: ARTEN[c.art].name, autocomplete: 'off', spellcheck: false });
+  const speichern = () => { const n = spitznameSetzen(i, eingabe.value); toast(n ? `Spitzname: „${esc(n)}“` : 'Spitzname entfernt'); fertig && fertig(n); };
+  eingabe.addEventListener('keydown', (e) => { if (e.key === 'Enter') { speichern(); m.zu(); } });
+  const m = modal({
+    titel: `Spitzname für ${esc(ARTEN[c.art].name)}`,
+    inhalt: h('div', {}, h('p', { class: 'leise', text: `Im Kampf, im Protokoll und im Album steht der Spitzname statt des Monsternamens. Höchstens ${SPITZNAME_MAX} Zeichen, leer lassen zum Entfernen.` }), eingabe),
+    knoepfe: [{ text: 'Abbrechen' }, ...(spitzname(i) ? [{ text: 'Entfernen', aktion: () => { eingabe.value = ''; speichern(); } }] : []), { text: 'Speichern', klasse: 'primaer', aktion: speichern }],
+  });
+  setTimeout(() => { eingabe.focus(); eingabe.select(); }, 60);
 }
 
 // Sichtbares Suchfeld (Name, Element, Rolle, Bauplan, Klasse, Holo, Effekte). Behält den Fokus beim Tippen.
@@ -189,6 +219,7 @@ export function filterChips(F, standard, neu) {
   if (F.staerkeMin !== standard.staerkeMin) chip(`Stärke ≥ ${F.staerkeMin}`, 'staerkeMin');
   if (F.kostenMax !== standard.kostenMax) chip(`Kosten ≤ ${F.kostenMax}`, 'kostenMax');
   if (F.fav !== standard.fav) chip(F.fav === 'nur' ? '★ nur Favoriten' : 'ohne Favoriten', 'fav');
+  if (F.tag !== standard.tag && F.tag != null) chip(F.tag === 'mit' ? 'mit Tag' : F.tag === 'ohne' ? 'ohne Tag' : `Tag: ${CONFIG.tags[Number(F.tag)].name}`, 'tag');
   if (F.team !== standard.team) chip(F.team === 'im' ? 'im Team' : 'nicht im Team', 'team');
   if (F.besitz !== standard.besitz) chip(F.besitz === 'entdeckt' ? 'nur entdeckte' : 'nur fehlende', 'besitz');
   if (!chips.length) return null;
@@ -221,6 +252,7 @@ export function filterFelder(F, neu, { ohne = [] } = {}) {
     feld('Stärke mindestens', zahl('staerkeMin', 200)),
     feld('Kosten höchstens', zahl('kostenMax', 999)),
     feld('Favoriten', sel('fav', [['alle', 'Alle'], ['nur', '★ nur Favoriten'], ['ohne', 'ohne Favoriten']])),
+    feld('Tag', sel('tag', [['alle', 'Alle'], ['mit', 'mit Tag'], ['ohne', 'ohne Tag'], ...CONFIG.tags.map((t, i) => [String(i), `● ${t.name}`])])),
     feld('Team', sel('team', [['alle', 'Alle'], ['im', 'im Team'], ['nicht', 'nicht im Team']])),
     feld('Monster', sel('besitz', [['alle', 'Alle'], ['entdeckt', 'nur entdeckte'], ['fehlend', 'nur fehlende']])),
   );
@@ -371,7 +403,8 @@ export function sammlungScreen(root) {
     k.append(karteElement(x.c, { animiert: false, nurMaus: true }));
     if (x.team) k.append(h('span', { class: 'team-marke', text: 'TEAM' }));
     k.append(favStern(x));
-    k.append(h('div', { class: 'sm-unter', html: `<b>${esc(x.art.name)}</b><span style="color:${stufenFarbe(x.st)}">${esc(CONFIG.seltenheit.kurz[x.st - 1])}</span><span>${ICON.muenze}${fmt(verkaufswert(x.c))}</span>` }));
+    if (x.tag != null) k.append(h('span', { class: 'tag-marke', style: `--tag:${CONFIG.tags[x.tag].farbe}`, title: `Tag: ${CONFIG.tags[x.tag].name}` }));
+    k.append(h('div', { class: 'sm-unter', html: `<b>${x.nick ? `„${esc(x.nick)}“` : esc(x.art.name)}</b><span style="color:${stufenFarbe(x.st)}">${esc(CONFIG.seltenheit.kurz[x.st - 1])}</span><span>${ICON.muenze}${fmt(verkaufswert(x.c))}</span>` }));
     k.addEventListener('click', () => kartenPopup(x.art.id, x.i));
     return k;
   };
@@ -395,6 +428,14 @@ export function sammlungScreen(root) {
       aktionen: [
         { text: 'Alle Karten &amp; Looks', aktion: (c, zu) => { zu(); stapelDetail(artId, neuLaden); } },
         {
+          text: (c) => { const x = xVon(c); return x?.nick ? `✎ „${esc(x.nick)}“` : '✎ Spitzname'; },
+          aktion: (c, zu, knopf) => {
+            const x = xVon(c);
+            if (!x) return;
+            spitznameDialog(x.i, (n) => { x.nick = n; knopf.innerHTML = n ? `✎ „${esc(n)}“` : '✎ Spitzname'; neuLaden(); });
+          },
+        },
+        {
           text: (c) => (xVon(c)?.fav ? '★ Favorit' : '☆ Als Favorit merken'),
           klasse: 'fav-knopf',
           aktion: (c, zu, knopf) => {
@@ -407,6 +448,14 @@ export function sammlungScreen(root) {
             if (vk) vk.disabled = x.fav || x.team;
             for (const y of daten) if (y.i === x.i) y.fav = x.fav;
             zeichneFavoriten(); zeichneGrid();
+          },
+        },
+        {
+          text: (c) => { const t = xVon(c)?.tag; return t != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[t].farbe}"></i> ${CONFIG.tags[t].name}` : '🏷 Tag'; },
+          aktion: (c, zu, knopf) => {
+            const x = xVon(c);
+            if (!x) return;
+            tagWahl(x.i, (t) => { x.tag = t; knopf.innerHTML = t != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[t].farbe}"></i> ${CONFIG.tags[t].name}` : '🏷 Tag'; neuLaden(); });
           },
         },
         {
@@ -519,11 +568,14 @@ export function stapelDetail(artId, nachher) {
     const imTeam = S.d.team.includes(auswahl);
     const istFav = S.d.favoriten.includes(auswahl);
     const favKnopf = h('button', { class: 'btn klein fav-knopf' + (istFav ? ' an' : ''), text: istFav ? '★ Favorit' : '☆ Als Favorit merken', onclick: () => { favoritUmschalten(auswahl); zeichne(); } });
+    const tagJetzt = tagVon(auswahl);
+    const tagKnopf = h('button', { class: 'btn klein', html: tagJetzt != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[tagJetzt].farbe}"></i> ${CONFIG.tags[tagJetzt].name}` : '🏷 Tag', onclick: () => tagWahl(auswahl, () => { zeichne(); nachher && nachher(); }) });
+    const nickKnopf = h('button', { class: 'btn klein', text: spitzname(auswahl) ? `✎ „${spitzname(auswahl)}“` : '✎ Spitzname', onclick: () => spitznameDialog(auswahl, () => { zeichne(); nachher && nachher(); }) });
     const verkauf = h('button', {
       class: 'btn klein', disabled: imTeam || istFav, html: imTeam ? 'Im Team, nicht verkaufbar' : istFav ? 'Favorit, nicht verkaufbar' : `${ICON.muenze} Diese Karte verkaufen +${fmt(verkaufswert(c))}`,
       onclick: () => { const ziel = auswahl; sicherVerkaufen([ziel], () => { const r = verkaufen([ziel]); Sound.muenze(); toast(`Verkauft: +${fmt(r.muenzen)} Münzen`); auswahl = s.beste; if (!s.anzahl) { m.zu(); return; } zeichne(); }); },
     });
-    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), favKnopf, verkauf);
+    links.replaceChildren(gross, h('p', { class: 'leise', text: 'Karte antippen für die große Ansicht mit allen Werten.' }), h('div', { class: 'staub-leiste klein', html: staubHTML() }), h('h4', { text: 'Looks übertragen' }), aktionen, h('p', { class: 'leise', text: 'Nur die fünf Zusatzlooks sind übertragbar. Holo-Stufe und Effekte bleiben fest auf der Karte.' }), nickKnopf, favKnopf, tagKnopf, verkauf);
 
     const liste = alle();
     const ausfChips = [...s.ausf.entries()].sort((x, y) => y[0] - x[0]).map(([k, n]) => {
@@ -537,7 +589,7 @@ export function stapelDetail(artId, nachher) {
     seite = Math.min(seite, seiten - 1);
     const zeilen = gefiltert.slice(seite * PRO, (seite + 1) * PRO).map((x) => h('button', {
       class: 'inst-zeile' + (x.i === auswahl ? ' an' : ''), onclick: () => { auswahl = x.i; zeichne(); },
-      html: `<span class="kl-punkt kl-${KLASSEN[x.c.kl].key}"></span><b>${x.sum}</b><span>${KLASSEN[x.c.kl].name}</span><span class="inst-ausf">${x.fav ? '★ ' : ''}${esc(ausfName(x.c.holo, x.c.looks))}${x.team ? ' · Team' : ''}</span><span class="inst-fx">${x.c.fx.length ? '✦'.repeat(x.c.fx.length) : ''}</span><span class="inst-st" style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span>`,
+      html: `<span class="kl-punkt kl-${KLASSEN[x.c.kl].key}"></span><b>${x.sum}</b><span>${KLASSEN[x.c.kl].name}</span><span class="inst-ausf">${tagVon(x.i) != null ? `<i class="tag-punkt" style="--tag:${CONFIG.tags[tagVon(x.i)].farbe}"></i> ` : ''}${x.fav ? '★ ' : ''}${spitzname(x.i) ? `„${esc(spitzname(x.i))}“ · ` : ''}${esc(ausfName(x.c.holo, x.c.looks))}${x.team ? ' · Team' : ''}</span><span class="inst-fx">${x.c.fx.length ? '✦'.repeat(x.c.fx.length) : ''}</span><span class="inst-st" style="color:${stufenFarbe(x.st)}">${esc(stufenName(x.st))}</span>`,
     }));
     rechts.replaceChildren(
       h('h4', { text: `Ausführungen (${s.ausf.size} von ${AUSF_GESAMT})` }),

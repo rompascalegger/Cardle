@@ -8,7 +8,7 @@ import { ARTEN } from '../species.js';
 import { monsterBild } from '../monsterart.js';
 import { EFFEKT, effektText } from '../effects.js';
 import { klassenGrenzen, holoGrenzen, prozent, pityChance, seltenheitsChancen, einsVon, pHolo, pEffekte } from '../rules.js';
-import { h, warte, anim, toast, schuetteln, partikel, blitzLicht, konfetti, ICON, fmt } from './dom.js';
+import { h, warte, anim, toast, schuetteln, partikel, blitzLicht, konfetti, ICON, fmt, modal } from './dom.js';
 import { karteVergroessern } from './lupe.js';
 
 const KLASSEN_FARBEN = ['#d4935a', '#dfe5ea', '#ffd23f', '#cfe6f2', '#3ee08f', '#ff4f72', '#4f8dff', '#e8f6ff'];
@@ -45,7 +45,8 @@ export function packsScreen(root, nav) {
   const kauf1 = h('button', { class: 'btn', html: `1 Pack kaufen · ${ICON.muenze} ${CONFIG.wirtschaft.packPreis}` });
   const kauf10 = h('button', { class: 'btn', html: `10 Packs · ${ICON.muenze} ${CONFIG.wirtschaft.packPreis * 10}` });
   const sonderBox = h('div', { class: 'sonder-packs' });
-  buehne.append(h('div', { class: 'buehne-licht' }), schwebe, h('div', { class: 'pack-aktionen' }, btnOeffnen, sonderBox, vorrat, h('div', { class: 'kauf' }, kauf1, kauf10)));
+  const mehrBox = h('div', { class: 'mehr-packs' });
+  buehne.append(h('div', { class: 'buehne-licht' }), schwebe, h('div', { class: 'pack-aktionen' }, btnOeffnen, mehrBox, sonderBox, vorrat, h('div', { class: 'kauf' }, kauf1, kauf10)));
   const info = h('aside', { class: 'panel pack-info' });
   wrap.append(buehne, info);
   root.append(wrap);
@@ -53,6 +54,7 @@ export function packsScreen(root, nav) {
   const aktualisiere = () => {
     vorrat.innerHTML = `Vorrat: <b>${fmt(S.d.packs)}</b> ${S.d.packs === 1 ? 'Pack' : 'Packs'}`;
     btnOeffnen.disabled = S.d.packs <= 0;
+    mehrBox.replaceChildren(...mengenOptionen(S.d.packs).map((n) => h('button', { class: 'btn', text: n === S.d.packs ? `Alle ${fmt(n)} öffnen` : `${n} öffnen`, onclick: async () => { await mehrerePacksOeffnen(n); aktualisiere(); } })));
     // Sonderpacks gruppiert: Glückspacks und Elementpacks je Element
     const gruppen = new Map();
     S.d.sonderPacks.forEach((sp, i) => { const key = sp.typ === 'gluecks' ? 'g' : sp.typ === 'erfolg' ? 'a' : 'e' + sp.el; if (!gruppen.has(key)) gruppen.set(key, { sp, idx: [] }); gruppen.get(key).idx.push(i); });
@@ -661,7 +663,11 @@ class Zeremonie {
       this.knoepfe([{ text: 'Auto-Öffnen anhalten', aktion: () => { abbruch(); zu(false); } }, { text: 'Weiter', klasse: 'primaer', aktion: () => { abbruch(); zu('weiter'); } }]);
     }
     if (this.ausAuto) knoepfe.unshift({ text: 'Auto-Öffnen fortsetzen', klasse: 'primaer', aktion: () => zu('weiter') });
-    else if (S.d.packs > 0) knoepfe.unshift({ text: `Nächstes Pack (${fmt(S.d.packs)})`, klasse: 'primaer', aktion: async () => { zu(false); await warte(320); naechstesPack(); } });
+    else if (S.d.packs > 0) {
+      // Mehrere Packs auf einmal [Nutzer, 24.11.2026]: Knöpfe je nach Vorrat
+      const mehr = mengenOptionen(S.d.packs).map((n) => ({ text: n === S.d.packs ? `Alle ${fmt(n)}` : `${n} Packs`, aktion: async () => { zu(false); await warte(320); await mehrerePacksOeffnen(n); } }));
+      knoepfe.unshift({ text: `Nächstes Pack (${fmt(S.d.packs)})`, klasse: 'primaer', aktion: async () => { zu(false); await warte(320); naechstesPack(); } }, ...mehr);
+    }
     if (!autoTimer) this.knoepfe(knoepfe);
     this.taste = (e) => { if (document.querySelector('.lupe-hg')) return; if (e.key === 'Escape') { abbruch(); zu(false); } if (e.key === 'Enter') { abbruch(); zu(this.autoAblauf ? 'weiter' : false); } };
     document.addEventListener('keydown', this.taste);
@@ -670,6 +676,61 @@ class Zeremonie {
 
 let packsNeuZeichnen = null;
 export const setzePackNeuzeichnen = (f) => { packsNeuZeichnen = f; };
+// Mengen für „mehrere Packs“: 5, 10, 25, 100 (soweit vorhanden) und „Alle“
+export function mengenOptionen(vorrat) {
+  const out = [5, 10, 25, 100].filter((n) => n < vorrat);
+  if (vorrat > 1) out.push(vorrat);
+  return out;
+}
+
+// Mehrere Packs sofort öffnen und gesammelt zeigen: Statistik und die besten Funde
+export async function mehrerePacksOeffnen(anzahl) {
+  const n = Math.min(anzahl, S.d.packs);
+  if (n <= 0) return;
+  const eintraege = [];
+  let effektPacks = 0;
+  for (let k = 0; k < n; k++) {
+    const pack = packOeffnen({ quelle: 'vorrat' });
+    if (pack.pityNachher === 0 && pack.pityVorher > 0) effektPacks++;
+    eintraege.push(...pack.eintraege);
+  }
+  aenderung('pack'); speichernBald(300);
+  Sound.rascheln();
+  const beste = Math.max(...eintraege.map((e) => e.stufe));
+  const neu = eintraege.filter((e) => e.neuArt).length;
+  const fx = eintraege.filter((e) => e.karte.fx.length).length;
+  const holo = eintraege.filter((e) => e.karte.holo !== 'keins').length;
+  const looks = eintraege.filter((e) => e.karte.looks).length;
+  const klassen = KLASSEN.map((_, i) => eintraege.filter((e) => e.karte.kl === i).length);
+  // Funde: alles Besondere zuerst (Seltenheit, Klasse, Effekte, neue Monster)
+  const wert = (e) => e.stufe * 1e5 + e.karte.fx.length * 1e4 + e.karte.kl * 1e3 + (e.neuArt ? 500 : 0) + (e.neuAusf ? 50 : 0);
+  const funde = eintraege.filter((e) => e.stufe >= 2 || e.karte.kl >= 3 || e.karte.fx.length || e.neuArt).sort((a, b) => wert(b) - wert(a));
+  const ZEIGEN = 60;
+  const grid = h('div', { class: 'ue-karten sammel-karten' }, funde.slice(0, ZEIGEN).map((e) => {
+    const el = karteElement(e.karte, { maxNeigung: 10 });
+    if (e.neuArt || e.neuAusf) el.append(h('div', { class: 'neu-marke', text: e.neuArt ? 'NEU' : 'NEUE AUSF.' }));
+    el.addEventListener('click', () => karteVergroessern(e.karte, { neu: e.neuArt ? 'NEU' : e.neuAusf ? 'NEUE AUSFÜHRUNG' : null }));
+    return el;
+  }));
+  if (beste >= 5) { Sound.jackpot(Math.min(5, beste - 3)); konfetti(60 + beste * 10, [stufenFarbe(beste), '#ffd447', '#fff']); } else Sound.stufe(beste);
+  const weiter = S.d.packs > 0 ? mengenOptionen(S.d.packs) : [];
+  modal({
+    titel: `${fmt(n)} Packs geöffnet`,
+    klasse: 'breit',
+    inhalt: h('div', { class: 'sammel' },
+      h('div', { class: 'sammel-stats', html: `<div><span>Karten</span><b>${fmt(eintraege.length)}</b></div><div><span>Neue Monster</span><b class="${neu ? 'gold' : ''}">${fmt(neu)}</b></div><div><span>Beste Karte</span><b style="color:${stufenFarbe(beste)}">${esc(stufenName(beste))}</b></div><div><span>Effektkarten</span><b class="${fx ? 'gold' : ''}">${fmt(fx)}</b></div><div><span>Holo</span><b>${fmt(holo)}</b></div><div><span>Mit Look</span><b>${fmt(looks)}</b></div>` }),
+      h('div', { class: 'kl-zeile', html: KLASSEN.map((k, i) => (klassen[i] ? `<span class="kl-chip kl-${k.key}">${k.name} <b>${fmt(klassen[i])}</b></span>` : '')).join('') }),
+      h('h4', { text: funde.length ? `Besondere Funde (${fmt(funde.length)}${funde.length > ZEIGEN ? `, die besten ${ZEIGEN}` : ''})` : 'Keine besonderen Funde, nur gewöhnliche Karten.' }),
+      grid),
+    knoepfe: [
+      ...(S.d.packs > 0 ? [{ text: `Nächstes Pack (${fmt(S.d.packs)})`, aktion: () => { setTimeout(naechstesPack, 320); } }] : []),
+      ...weiter.map((m) => ({ text: m === S.d.packs ? `Alle ${fmt(m)}` : `${m} Packs`, aktion: () => { setTimeout(() => mehrerePacksOeffnen(m), 320); } })),
+      { text: 'Fertig', klasse: 'primaer' },
+    ],
+    onClose: () => { packsNeuZeichnen && packsNeuZeichnen(); },
+  });
+}
+
 async function naechstesPack() {
   if (S.d.packs <= 0) return;
   const pack = packOeffnen({ quelle: 'vorrat' });

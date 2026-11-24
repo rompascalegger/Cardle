@@ -2,7 +2,7 @@
 import { CONFIG, KLASSEN, LOOKS, HOLO_NAMEN } from './config.js';
 import { ELEMENTE, farbe, farbton, glyphSVG, beziehungen, faktorText } from './elements.js';
 import { ATTRIBUTE, attrIcon } from './attributes.js';
-import { EFFEKT } from './effects.js';
+import { EFFEKT, effektText } from './effects.js';
 import { ARTEN, FORMEN } from './species.js';
 import { monsterBild } from './monsterart.js';
 import { staerke, kosten, kartenSeltenheit, lookAnzahl, hatLook, seltenheitsChancen, pHolo, pEffekte, prozent, einsVon, plaetzeBelegt, plaetzeBringt, teamplatzMult } from './rules.js';
@@ -36,7 +36,8 @@ export function karteHTML(c, opts = {}) {
   const looks = LOOKS.map((l, i) => (hatLook(c.looks, i) ? ' look-' + l.key : '')).join('');
   const attr = ATTRIBUTE.filter((a) => !['kapazitaet', 'heilung'].includes(a.key) || c.a[a.key] > 0).map((a) =>
     `<span class="k-a${c.a[a.key] ? '' : ' null'}" data-tip="${esc(a.name)}: ${c.a[a.key]}">${attrIcon(a.key)}${CONFIG.zahlNebenSymbol ? `<i>${c.a[a.key]}</i>` : ''}</span>`).join('');
-  const fx = c.fx.map((id) => { const e = EFFEKT[id]; return `<span class="k-fx-b${e.blitz ? ' blitz' : ''}" data-tip="${esc(e.name)} (Preis ×${zahl(e.faktor)}): ${esc(e.wirkung)}">${e.blitz ? '⚡' : '✦'} ${esc(e.name)}</span>`; }).join('');
+  // Effekt-Seltenheit 1–5 färbt die Zeile (grün, blau, violett, golden, rot) [Nutzer, 24.11.2026]
+  const fx = c.fx.map((id, i) => { const e = EFFEKT[id]; const st = c.fxs?.[i] || 1; return `<span class="k-fx-b fxs-${st}${e.blitz ? ' blitz' : ''}" style="--fxc:${CONFIG.effektStufen.farben[st - 1]}" data-tip="${esc(e.name)} · ${CONFIG.effektStufen.namen[st - 1]} (+${st} Beschwörung): ${esc(effektText(id, st))}">${e.blitz ? '⚡' : '✦'} ${esc(e.name)}${e.skaliert ? ` <b class="fx-stufe">${'I II III IV V'.split(' ')[st - 1]}</b>` : ''}</span>`; }).join('');
   const kopien = (n, cls) => Array.from({ length: n }, (_, i) => `<img class="${cls} ${cls}${i}" src="${bild.fg}" alt="" draggable="false">`).join('');
   const lookKopien = (hatLook(c.looks, 3) ? kopien(2, 'k-gl') : '') + (hatLook(c.looks, 4) ? kopien(2, 'k-fd') : '');
   const rueck = opts.rueckseite === 'info' ? infoRueckseite(c) : logoRueckseite();
@@ -115,7 +116,7 @@ ${zeile(HOLO_NAMEN[c.holo], prozent(pHolo(c.holo)))}
 ${zeile(`${k} Zusatzlook${k === 1 ? '' : 's'}`, k ? prozent(pk ** k) + ' je Satz' : '–')}
 ${zeile(`${c.fx.length} Effekt${c.fx.length === 1 ? '' : 'e'}`, prozent(pEffekte(c.fx.length)))}
 ${zeile(stufenName(st), einsVon(CHANCEN[st]))}
-${c.fx.length ? `<div class="rs-h">Effekte</div>${c.fx.map((id) => `<div class="rs-fx"><b>${esc(EFFEKT[id].name)}</b> ${esc(EFFEKT[id].wirkung)}</div>`).join('')}` : ''}
+${c.fx.length ? `<div class="rs-h">Effekte</div>${c.fx.map((id, i) => { const st = c.fxs?.[i] || 1; return `<div class="rs-fx" style="--fxc:${CONFIG.effektStufen.farben[st - 1]}"><b>${esc(EFFEKT[id].name)}</b> <i class="fx-sel">${CONFIG.effektStufen.namen[st - 1]} · +${st}</i> ${esc(effektText(id, st))}</div>`; }).join('')}` : ''}
 </div>`;
 }
 

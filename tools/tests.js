@@ -147,10 +147,15 @@ test('Stärke = Summe der Attribute, im Klassenbereich, Obergrenzen eingehalten'
   }
   return { ok: !fehler, info: fehler };
 });
-test('Kosten: Effektaufschläge addieren sich gedämpft, höchstens ×2', () => {
-  const c = (fx) => ({ art: 0, kl: 0, a: { kraft: 10, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx });
-  // Verstärker 3,0 → 1 + 0,3·2 = 1,6; Verstärker + Doppelrufer + Elementverstärker → gedeckelt bei 2
-  return kosten(c([])) === 10 && kosten(c([1])) === 16 && kosten(c([1, 2, 3])) === 20;
+test('Kosten: Stärke + Effekt-Seltenheit (Stufe 1–5 kostet +1 bis +5)', () => {
+  const c = (fx, fxs) => ({ art: 0, kl: 0, a: { kraft: 10, schutz: 0, groesse: 0, wildheit: 0, seltsamkeit: 0, schlagzahl: 0, teamplatz: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx, fxs });
+  return kosten(c([], [])) === 10 && kosten(c([1], [1])) === 11 && kosten(c([55, 1], [4, 1])) === 15 && kosten(c([56, 57, 58], [5, 5, 5])) === 25;
+});
+test('Kodierung: Effekt-Seltenheit bleibt erhalten, alte Codes lesen sich als Stufe 1', () => {
+  const c = { art: 5, kl: 3, a: { kraft: 4, schutz: 2, groesse: 1, wildheit: 0, seltsamkeit: 0, schlagzahl: 1, teamplatz: 0, heilung: 0, kapazitaet: 0 }, holo: 'keins', looks: 0, fx: [55, 14, 63], fxs: [5, 1, 3] };
+  const d = dekodiere(kodiere(c));
+  const alt = dekodiere(kodiere({ ...c, fxs: undefined }));
+  return d.fx.join() === '55,14,63' && d.fxs.join() === '5,1,3' && alt.fxs.join() === '1,1,1';
 });
 test('Monster: 20 je Element plus Silber-Monster, alle Namen eindeutig', () => {
   const namen = new Set(ARTEN.map((a) => a.name));
@@ -164,7 +169,7 @@ test('Silber-Monster erscheinen nur als Silber', () => {
   for (let i = 0; i < 2e5; i++) { const { karte: c } = wuerfleKarte(r, 0); if (ARTEN[c.art].silber) { n++; if (c.kl !== CONFIG.monster.silberKlasse) return { ok: false, info: `Klasse ${c.kl}` }; } }
   return { ok: n > 0, info: `${n} Silber-Monster gezogen` };
 });
-test('Effekte: 53 im Pack-Pool plus Boss-Effekt, jede ID einmal', () => new Set(EFFEKTE.map((e) => e.id)).size === EFFEKTE.length && EFFEKTE.filter((e) => !e.nurBoss).length === 53);
+test('Effekte: 53 alte + 9 neue im Pack-Pool plus Boss-Effekt, jede ID einmal', () => new Set(EFFEKTE.map((e) => e.id)).size === EFFEKTE.length && EFFEKTE.filter((e) => !e.nurBoss).length === 62 && EFFEKTE.filter((e) => e.skaliert).length === 9);
 test('Kodierung: alte Karten ohne Heilung werden weiter gelesen', () => { const alt = '0a2' + '53101010' + '0' + '0'; const c = dekodiere(alt); return c.a.kraft === 5 && c.a.kapazitaet === 0 && c.a.teamplatz === 1 && c.a.heilung === 0 && c.holo === 'keins' && c.fx.length === 0; });
 
 // ---------- Kampf ----------
@@ -203,7 +208,8 @@ test('Leben: Angriff ohne eigene Monster kostet 1 Leben pro Runde', () => {
 test('Kampagne: 32 Dimensionen × 8 Welten × 10 Stufen + Kern, eindeutige Weltnamen, Stärke steigt, Stichprobe endet', () => {
   const welten = DIMENSIONEN.flatMap((d) => d.welten);
   const namen = new Set(welten.map((w) => w.name));
-  const anzahlOk = ALLE_KAEMPFE.length === 32 * 8 * 10 + CONFIG.kern.welten * 10 && welten.length === 32 * 8 + CONFIG.kern.welten;
+  const L = CONFIG.kampagne.stufenProWelt;
+  const anzahlOk = ALLE_KAEMPFE.length === (32 * 8 + CONFIG.kern.welten + CONFIG.tiefKern.welten) * L && welten.length === 32 * 8 + CONFIG.kern.welten + CONFIG.tiefKern.welten;
   let wachsend = true, alleEnden = true, regeln = true;
   for (const d of DIMENSIONEN) {
     let letzte = 0;
@@ -244,6 +250,45 @@ test('Gegnerkarten liegen im Klassenbereich', () => {
   return true;
 });
 void LOOKS;
+
+
+// ---------- Effekte im Kampf: jeder Effekt mit eigenem Szenario [Nutzer, 24.11.2026: Effekte auf Funktion prüfen] ----------
+const FX = Object.fromEntries(EFFEKTE.map((e) => [e.key, e.id]));
+const kk = (a, fx = [], fxs = []) => ({ art: artVon(0), kl: 2, a: { ...leer(), heilung: 0, ...a }, holo: 'keins', looks: 0, fx: fx.map((key) => FX[key]), fxs });
+// Kampf mit Karten in der Hand, viel Bank, Zug 1. leg(s, i, spalte) beschwört Handkarte i.
+function szenario(eigene, feinde, seed = 'fx') {
+  const b = neuerKampf({ spielerKarten: eigene, gegnerKarten: feinde, rng: new Rng(seed) });
+  b.zug = 1;
+  b.seiten[0].bank = 999; b.seiten[1].bank = 999;
+  const leg = (s, i, sp) => { const u = b.seiten[s].hand[i]; beschwoere(b, s, b.seiten[s].hand.indexOf(u), sp); return u; };
+  return { b, leg };
+}
+const effektTests = {
+  blitzschlag: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['blitzschlag'])], [kk({ schutz: 20 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.schaden === 6; },
+  blitzheilung: () => { const { b, leg } = szenario([kk({ schutz: 20 }), kk({ kraft: 1 }, ['blitzheilung'])], []); const v = leg(0, 0, 0); v.schaden = 12; leg(0, 0, 1); return v.schaden === 2; },
+  blitzruf: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['blitzruf']), kk({ kraft: 8 })], []); leg(0, 0, 0); return b.seiten[0].hand.length === 0 && b.seiten[0].feld.filter(Boolean).length === 2; },
+  erinnerung: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['erinnerung']), kk({ kraft: 5 })], [kk({ kraft: 30, schlagzahl: 1 })]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 3; kampf(b); return u.tot && b.seiten[0].hand.length === 0; },
+  beutezug: () => { const { b, leg } = szenario([kk({ kraft: 30, schlagzahl: 1, schutz: 20 }, ['beutezug']), kk({ kraft: 5 })], [kk({ kraft: 1 })]); leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return b.seiten[0].hand.length === 0; },
+  opferaltar: () => { const { b, leg } = szenario([kk({ schutz: 3 }), kk({ kraft: 5 }, ['opferaltar']), kk({ kraft: 9 })], []); const opfer = leg(0, 0, 0); b.seiten[0].hand[0].c; const altar = leg(0, 0, 1); b.zug = 2; zugBeginn(b); return opfer.tot && !altar.tot && b.seiten[0].hand.length === 0; },
+  letzterwille: () => { const { b, leg } = szenario([kk({ schutz: 20 }), kk({ kraft: 1 }, ['letzterwille'])], [kk({ kraft: 30, schlagzahl: 1 })]); const v = leg(0, 0, 0); leg(0, 0, 1); leg(1, 0, 1); b.zug = 2; kampf(b); return v.buff.some((x) => x.kraft === 4); },
+  lebenslicht: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['lebenslicht']), kk({ schutz: 20 })], [kk({ kraft: 30, schlagzahl: 1 })]); leg(0, 0, 0); leg(0, 0, 1); leg(1, 0, 0); const vor = b.seiten[0].leben; b.zug = 2; kampf(b); return b.seiten[0].leben === vor + 2; },
+  herzstueck: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['herzstueck'])], []); const vor = b.seiten[0].leben; leg(0, 0, 0); zugBeginn(b); return b.seiten[0].leben === vor + 2; },
+  zweiteratem: () => { const { b, leg } = szenario([kk({ kraft: 1, schutz: 1 }, ['zweiteratem'])], [kk({ kraft: 30, schlagzahl: 1 })]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return !u.tot && u.atemGenutzt; },
+  bann: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['bann'], [3])], [kk({ kraft: 5, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.bannBis === b.zug + 2; },
+  eintrittsstich: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['eintrittsstich'], [4])], [kk({ schutz: 20 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return z.schaden === 8; },
+  schrumpfzauber: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['schrumpfzauber'], [2])], [kk({ kraft: 10, schlagzahl: 1 })]); const z = leg(1, 0, 0); leg(0, 0, 0); return werte(b, z).kraft === 6; },
+  schutzgeist: () => { const { b, leg } = szenario([kk({ kraft: 1 }), kk({ kraft: 1 }, ['schutzgeist'], [5])], []); const v = leg(0, 0, 0); leg(0, 0, 1); return werte(b, v).schutz === 5; },
+  giftstachel: () => { const { b, leg } = szenario([kk({ kraft: 1, schlagzahl: 1 }, ['giftstachel'], [3])], [kk({ schutz: 30 })]); leg(0, 0, 0); const z = leg(1, 0, 0); b.zug = 2; kampf(b); const vor = z.schaden; zugBeginn(b); return z.schaden - vor === 3; },
+  lebensraub: () => { const { b, leg } = szenario([kk({ kraft: 3, schlagzahl: 1, schutz: 10 }, ['lebensraub'], [2])], [kk({ schutz: 30 })]); const u = leg(0, 0, 0); leg(1, 0, 0); u.schaden = 5; b.zug = 2; kampf(b); return u.schaden === 3; },
+  winzlingswut: () => { const { b, leg } = szenario([kk({ kraft: 2, groesse: 1 }, ['winzlingswut'], [3]), kk({ kraft: 2, groesse: 3 }, ['winzlingswut'], [3])], []); const a = leg(0, 0, 0), g = leg(0, 0, 1); b.zug = 2; return werte(b, a).kraft === 8 && werte(b, g).kraft === 2; },
+  rudelbiss: () => { const { b, leg } = szenario([kk({ kraft: 2 }, ['rudelbiss'], [2]), kk({ kraft: 1 }), kk({ kraft: 1 })], []); const a = leg(0, 0, 0); leg(0, 0, 1); leg(0, 0, 2); b.zug = 2; return werte(b, a).kraft === 6; },
+  flink: () => { let aus = 0; for (let i = 0; i < 200; i++) { const { b, leg } = szenario([kk({ kraft: 1, schlagzahl: 1 })], [kk({ schutz: 30, groesse: 3 }, ['flink'], [5])], 'f' + i); leg(0, 0, 0); const z = leg(1, 0, 0); b.zug = 2; kampf(b); if (z.schaden === 0) aus++; } return aus > 60 && aus < 160; },
+  verstaerker: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['verstaerker']), kk({ kraft: 1 }, ['doppelrufer'])], []); leg(0, 0, 0); const vor = b.seiten[0].bank; zugBeginn(b); const nur3 = b.seiten[0].bank - vor; leg(0, 0, 1); const v2 = b.seiten[0].bank; zugBeginn(b); return nur3 === 30 && b.seiten[0].bank - v2 === 63; },
+  rudelruf: () => { const { b, leg } = szenario([kk({ kraft: 1 }, ['rudelruf']), kk({ kraft: 10 })], []); leg(0, 0, 0); zugBeginn(b); const vor = b.seiten[0].bank; leg(0, 0, 1); return vor - b.seiten[0].bank === 7; },
+  dornen: () => { const { b, leg } = szenario([kk({ kraft: 1, schlagzahl: 1, schutz: 30 })], [kk({ schutz: 30 }, ['dornen'])]); const u = leg(0, 0, 0); leg(1, 0, 0); b.zug = 2; kampf(b); return u.schaden === 3; },
+  regeneration: () => { const { b, leg } = szenario([kk({ schutz: 10 }, ['regeneration'])], []); const u = leg(0, 0, 0); u.schaden = 5; zugBeginn(b); return u.schaden === 2; },
+};
+for (const [key, f] of Object.entries(effektTests)) test(`Effekt im Kampf: ${EFFEKTE.find((e) => e.key === key).name}`, f);
 
 const ok = ergebnisse.filter((e) => e.ok).length;
 document.getElementById('summe').textContent = `${ok} / ${ergebnisse.length} Tests bestanden`;

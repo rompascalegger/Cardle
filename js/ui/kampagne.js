@@ -4,12 +4,12 @@ import { S, karte, teamPlaetze, aenderung, speichernBald, sonderPacksGeben, team
 import { karteElement, esc, zahl } from '../cardview.js';
 import { ELEMENTE, N, GLYPHEN, glyphSVG, farbe, farbton, faktorText } from '../elements.js';
 import { attrIcon } from '../attributes.js';
-import { EFFEKT_BY_KEY } from '../effects.js';
+import { EFFEKT_BY_KEY, effektText } from '../effects.js';
 import { monsterBild } from '../monsterart.js';
 import { Sound } from '../audio.js';
 import { Rng } from '../rng.js';
 import { staerke } from '../rules.js';
-import { DIMENSIONEN, KERN_DIM, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
+import { DIMENSIONEN, KERN_DIM, TIEF_DIM, istKern, tiefOffen, kampfNachId, freigeschaltet, naechsterKampf, aktuelleWelt, gegnerTeam, teamInfo, belohnung, schwierigkeit, elementNamen, kampfWerte, weltenFertig, weltenFertigIn, weltenGesamt, weltFertig, weltOffen, dimensionOffen, kernOffen, stufenFertigIn, weltName, dimensionName, weltThema, themaElement } from '../campaign.js';
 import { dailyKampf, dailyGegner, dailyTeam, dailyTeamWaehlen, dailyBelohnung, dailyStand, dailyGeschafft, msBisMorgen } from '../daily.js';
 import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
 import { karteVergroessern } from './lupe.js';
@@ -76,11 +76,16 @@ export function kampagneScreen(root, nav) {
     const bereit = DIMENSIONEN.slice(0, KERN_DIM).filter((_, d) => weltenFertigIn(fort, d) >= CONFIG.kern.freiAbWeltenJeDimension).length;
     svg += `<defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset="1" stop-color="#ffb347"/></linearGradient><radialGradient id="kern"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#b45cff"/><stop offset="1" stop-color="#1a0b30"/></radialGradient></defs>`;
     svg += `<g class="kp-kern${dim === KERN_DIM ? ' an' : ''}${kOffen ? '' : ' zu'}" data-d="${KERN_DIM}"><circle cx="200" cy="200" r="104" fill="url(#kern)" opacity="${kOffen ? 0.95 : 0.35}"/>`;
-    svg += `<text x="200" y="190" text-anchor="middle" class="kp-kern-t">Kern</text><text x="200" y="214" text-anchor="middle" class="kp-kern-s">${kOffen ? `${kFertig}/16 Welten` : `🔒 ${bereit}/32 bereit`}</text><title>Kern-Dimension: offen, wenn in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten fertig sind</title></g></svg>`;
+    svg += `<text x="200" y="152" text-anchor="middle" class="kp-kern-t">Kern</text><text x="200" y="174" text-anchor="middle" class="kp-kern-s">${kOffen ? `${kFertig}/16 Welten` : `🔒 ${bereit}/32 bereit`}</text><title>Kern-Dimension: offen, wenn in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten fertig sind</title></g>`;
+    // Tiefer Kern [Nutzer, 24.11.2026]: kleiner Kreis in der Mitte, offen nach allen 16 Kern-Welten
+    const tOffen = tiefOffen(fort), tFertig = weltenFertigIn(fort, TIEF_DIM);
+    svg += `<defs><radialGradient id="tief"><stop offset="0" stop-color="#ffe2e2"/><stop offset=".45" stop-color="#ff3d5e"/><stop offset="1" stop-color="#1a0410"/></radialGradient></defs>`;
+    svg += `<g class="kp-kern kp-tief${dim === TIEF_DIM ? ' an' : ''}${tOffen ? '' : ' zu'}" data-d="${TIEF_DIM}"><circle cx="200" cy="228" r="44" fill="url(#tief)" opacity="${tOffen ? 0.95 : 0.4}"/>`;
+    svg += `<text x="200" y="226" text-anchor="middle" class="kp-kern-s">Tiefer Kern</text><text x="200" y="244" text-anchor="middle" class="kp-kern-s">${tOffen ? `${tFertig}/16` : '🔒'}</text><title>Tiefer Kern: offen, wenn alle 16 Kern-Welten abgeschlossen sind. Gegnereffekte mit Seltenheit 2–5.</title></g></svg>`;
     radBox.innerHTML = svg;
     radBox.querySelectorAll('[data-d]').forEach((g) => g.addEventListener('click', () => {
       const d = Number(g.dataset.d);
-      if (!dimensionOffen(fort, d)) { toast(`Die Kern-Dimension öffnet sich, wenn du in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten abgeschlossen hast (${bereit}/32).`); return; }
+      if (!dimensionOffen(fort, d)) { toast(d === TIEF_DIM ? `Der Tiefe Kern öffnet sich, wenn du alle 16 Welten der Kern-Dimension abgeschlossen hast (${kFertig}/16).` : `Die Kern-Dimension öffnet sich, wenn du in jeder Dimension ${CONFIG.kern.freiAbWeltenJeDimension} Welten abgeschlossen hast (${bereit}/32).`); return; }
       dim = d; K.dim = d; welt = K.weltWahl[d] || aktuelleWelt(fort, d);
       Sound.klick(); zeichneAlles();
     }));
@@ -89,14 +94,14 @@ export function kampagneScreen(root, nav) {
   const zeichneDim = () => {
     const D = DIMENSIONEN[dim];
     const fertig = weltenFertigIn(fort, dim);
-    const glyphe = dim === KERN_DIM ? '★' : glyphSVG(dim);
+    const glyphe = dim === KERN_DIM ? '★' : dim === TIEF_DIM ? '✷' : glyphSVG(dim);
     dimBox.replaceChildren(
-      h('div', { class: 'kp-dim-kopf', html: `<span class="siegel-klein gross" style="--el:${dim === KERN_DIM ? '#b45cff' : farbe(dim)}">${glyphe}</span><div><h3>${esc(D.name)}</h3><small>${fertig}/${D.welten.length} Welten · ${dim === KERN_DIM ? 'Gegenpol-Paare aus allen Elementen' : esc(ELEMENTE[dim].bed)}</small></div>` }),
+      h('div', { class: 'kp-dim-kopf', html: `<span class="siegel-klein gross" style="--el:${dim === KERN_DIM ? '#b45cff' : dim === TIEF_DIM ? '#ff3d5e' : farbe(dim)}">${glyphe}</span><div><h3>${esc(D.name)}</h3><small>${fertig}/${D.welten.length} Welten · ${dim === KERN_DIM ? 'Gegenpol-Paare aus allen Elementen' : dim === TIEF_DIM ? `Gegnereffekte mit Seltenheit ${CONFIG.tiefKern.effektStufe(1)}–${CONFIG.tiefKern.effektStufe(16)}` : esc(ELEMENTE[dim].bed)}</small></div>` }),
       h('div', { class: 'kp-welten' }, D.welten.map((w) => {
         const offen = weltOffen(fort, dim, w.nr), done = weltFertig(fort, dim, w.nr);
         const n = stufenFertigIn(fort, dim, w.nr);
         const b = h('button', { class: 'kp-weltkarte' + (w.nr === welt ? ' an' : '') + (done ? ' fertig' : '') + (offen ? '' : ' zu'), style: `background-image:linear-gradient(180deg, rgba(10,6,24,.1), rgba(10,6,24,.85)), url("${weltThema(dim, w.nr)}")`,
-          html: `<span class="kp-wn">${w.nr}</span><b>${esc(w.name)}</b><small>${done ? '✓ abgeschlossen' : offen ? `${n}/10 Stufen` : '🔒 gesperrt'}</small><i class="kp-wb"><i style="width:${n * 10}%"></i></i>` });
+          html: `<span class="kp-wn">${w.nr}</span><b>${esc(w.name)}</b><small>${done ? '✓ abgeschlossen' : offen ? `${n}/${CONFIG.kampagne.stufenProWelt} Stufen` : '🔒 gesperrt'}</small><i class="kp-wb"><i style="width:${(n / CONFIG.kampagne.stufenProWelt) * 100}%"></i></i>` });
         b.addEventListener('click', () => { if (!offen) { toast('Schließe zuerst die vorige Welt ab.'); return; } welt = w.nr; K.weltWahl[dim] = w.nr; Sound.klick(); zeichneDim(); zeichneWelt(); });
         return b;
       })),
@@ -106,7 +111,7 @@ export function kampagneScreen(root, nav) {
   const zeichneWelt = () => {
     const W = DIMENSIONEN[dim].welten[welt - 1];
     const eigene = teamStaerke();
-    const wb = dim === KERN_DIM ? CONFIG.kern.weltBelohnung(welt) : CONFIG.kampagne.weltBelohnung(welt);
+    const wb = dim === KERN_DIM ? CONFIG.kern.weltBelohnung(welt) : dim === TIEF_DIM ? CONFIG.tiefKern.weltBelohnung(welt) : CONFIG.kampagne.weltBelohnung(welt);
     const pfad = h('div', { class: 'ebene-pfad stufen' });
     W.stufen.forEach((k, i) => {
       if (i) pfad.append(h('i', { class: 'pfad-linie' + (fort[W.stufen[i - 1].id] ? ' an' : '') }));
@@ -302,7 +307,7 @@ export function kampfScreen(root, nav, { id, daily = null }) {
     const z = (key, wert, tip) => `<span data-tip="${tip}: ${wert}">${attrIcon(key)}<b>${wert}</b></span>`;
     t.querySelector('.eh-werte').innerHTML = z('kraft', w.kraft, 'Elementarkraft') + z('schutz', w.schutz, 'Elementarschutz') + z('wildheit', w.wild, 'Wildheit') + z('schlagzahl', w.schlag, 'Schlagzahl') + (w.groesse ? z('groesse', w.groesse, 'Größe') : '') + (w.selt ? z('seltsamkeit', w.selt, 'Seltsamkeit') : '') + (u.a.heilung ? z('heilung', u.a.heilung, 'Heilung je Runde') : '') + (w.mult > 1 ? `<span data-tip="Teamplatz-Multiplikator">×${zahl(w.mult)}</span>` : '');
     const fx = [...u.fx, ...(u.kopie ? [u.kopie] : [])];
-    t.querySelector('.eh-fx').innerHTML = fx.map((key) => { const e = EFFEKT_BY_KEY[key]; const an = b.zug >= u.aktivAb && u.gebanntZug !== b.zug; return `<span class="${an ? 'an' : ''}" data-tip="${esc(e.name)}${an ? '' : ' (noch nicht aktiv)'}: ${esc(e.wirkung)}">${e.blitz ? '⚡' : '✦'}</span>`; }).join('');
+    t.querySelector('.eh-fx').innerHTML = fx.map((key) => { const e = EFFEKT_BY_KEY[key]; const an = b.zug >= u.aktivAb && u.gebanntZug !== b.zug; const st = u.fxStufe?.[key] || 1; return `<span class="${an ? 'an' : ''}" style="--fxc:${CONFIG.effektStufen.farben[st - 1]}" data-tip="${esc(e.name)} (${CONFIG.effektStufen.namen[st - 1]})${an ? '' : ' (noch nicht aktiv)'}: ${esc(effektText(e.id, st))}">${e.blitz ? '⚡' : '✦'}</span>`; }).join('');
     const el = angezeigtesEl(u, 0);
     t.style.setProperty('--el', farbe(el));
     t.querySelector('.eh-siegel').innerHTML = glyphSVG(el) + (u.elZug !== u.el && (u.seite === 0 || u.enthuellt || u.falschEl == null) ? '<i class="versch">↻</i>' : '');

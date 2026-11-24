@@ -3,7 +3,7 @@ import { KLASSEN } from './config.js';
 import { ELEMENTE } from './elements.js';
 import { ARTEN, REGULAERE_ARTEN } from './species.js';
 import { S, aenderung, speichernBald, sonderPacksGeben } from './state.js';
-import { DIMENSIONEN, KERN_DIM, weltenFertig, weltenFertigIn, dimensionFertig, kernOffen } from './campaign.js';
+import { DIMENSIONEN, KERN_DIM, TIEF_DIM, weltenFertig, weltenFertigIn, dimensionFertig, kernOffen, tiefOffen } from './campaign.js';
 
 const fort = () => S.d.kampagne.fortschritt;
 const entdeckt = (silber = false) => ARTEN.filter((a) => !!a.silber === silber && (S.stapel.get(a.id)?.anzahl || 0) > 0).length;
@@ -14,6 +14,8 @@ export const ERFOLGE = [
   ...[1, 4, 8, 16, 32].map((n) => ({ id: 'dims' + n, gruppe: 'Kampagne', name: n === 1 ? 'Dimensionsmeister' : `${n} Dimensionen`, text: `Schließe alle Welten von ${n} Dimension${n > 1 ? 'en' : ''} ab.`, ziel: n, wert: dimsFertig, lohn: { gluecks: 2 + Math.floor(n / 4), muenzen: 20000 * n } })),
   { id: 'kern-offen', gruppe: 'Kampagne', name: 'Zum Kern', text: 'Öffne die Kern-Dimension (2 Welten in jeder Dimension).', ziel: 1, wert: () => (kernOffen(fort()) ? 1 : 0), lohn: { gluecks: 3, muenzen: 50000 } },
   { id: 'kern-fertig', gruppe: 'Kampagne', name: 'Herz des Rads', text: 'Schließe alle 16 Welten der Kern-Dimension ab.', ziel: 16, wert: () => weltenFertigIn(fort(), KERN_DIM), lohn: { gluecks: 10, muenzen: 500000 } },
+  { id: 'tief-offen', gruppe: 'Kampagne', name: 'Hinab in die Tiefe', text: 'Öffne den Tiefen Kern (alle 16 Kern-Welten).', ziel: 1, wert: () => (tiefOffen(fort()) ? 1 : 0), lohn: { gluecks: 6, muenzen: 600000 } },
+  { id: 'tief-fertig', gruppe: 'Kampagne', name: 'Grund des Abgrunds', text: 'Schließe alle 16 Welten des Tiefen Kerns ab.', ziel: 16, wert: () => weltenFertigIn(fort(), TIEF_DIM), lohn: { gluecks: 20, muenzen: 2000000 } },
   ...ELEMENTE.map((e, d) => ({ id: 'dim-' + d, gruppe: 'Dimensionen', name: `${e.name}-Bezwinger`, text: `Schließe alle 8 Welten der ${e.name}-Dimension ab.`, ziel: 8, wert: () => weltenFertigIn(fort(), d), lohn: { element: 2, el: d, gluecks: 1, muenzen: 15000 } })),
   ...[10, 100, 500, 1000, 2500].map((n) => ({ id: 'siege' + n, gruppe: 'Kampf', name: `${n} Siege`, text: `Gewinne ${n} Kämpfe.`, ziel: n, wert: () => S.d.kampagne.siege, lohn: { packs: 5 + Math.floor(n / 20), muenzen: 200 * n } })),
   ...[1, 7, 30].map((n) => ({ id: 'daily-serie' + n, gruppe: 'Daily', name: n === 1 ? 'Täglich dabei' : `${n} Tage in Folge`, text: `Gewinne an ${n} Tag${n > 1 ? 'en in Folge' : ''} eine Daily Challenge.`, ziel: n, wert: () => S.d.daily?.serie || 0, lohn: { packs: 3 * n, gluecks: n >= 7 ? 1 : 0 } })),

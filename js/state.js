@@ -145,7 +145,15 @@ export async function laden() {
   S.d.erfolgeAbgeholt = S.d.erfolgeAbgeholt || {};
   while (S.d.gluecksPacks > 0) { S.d.sonderPacks.push({ typ: 'gluecks' }); S.d.gluecksPacks--; }
   // Kampagne v2: neue Kampfstruktur, alter Fortschritt passt nicht mehr
-  if ((S.d.kampagne.v || 1) < CONFIG.kampagne.version) { S.d.kampagne.fortschritt = {}; S.d.kampagne.v = CONFIG.kampagne.version; }
+  const kv = S.d.kampagne.v || 1;
+  if (kv === 4) {
+    // v4 → v5 [24.11.2026]: 10 → 12 Stufen je Welt. Fertige Welten bleiben fertig (alle 12 Stufen),
+    // sonst zählt die Zahl geschaffter Stufen von vorn. Kein Fortschritt geht verloren.
+    const alt = S.d.kampagne.fortschritt, neu = {}, proWelt = new Map();
+    for (const id in alt) { const m = /^d(\d+)w(\d+)l(\d+)$/.exec(id); if (!m || !alt[id]) continue; const key = `d${m[1]}w${m[2]}`; const x = proWelt.get(key) || { n: 0, boss: false }; x.n++; if (Number(m[3]) === 10) x.boss = true; proWelt.set(key, x); }
+    for (const [key, x] of proWelt) { const bis = x.boss ? CONFIG.kampagne.stufenProWelt : Math.min(x.n, CONFIG.kampagne.stufenProWelt - 1); for (let l = 1; l <= bis; l++) neu[`${key}l${l}`] = 1; }
+    S.d.kampagne.fortschritt = neu; S.d.kampagne.v = CONFIG.kampagne.version;
+  } else if (kv < CONFIG.kampagne.version) { S.d.kampagne.fortschritt = {}; S.d.kampagne.v = CONFIG.kampagne.version; }
   S.rng = new Rng(S.d.seed);
   if (S.d.rng) S.rng.setState(S.d.rng);
   if (DEBUG && !roh) { S.d.packs = 500; S.d.muenzen = 1000000; }

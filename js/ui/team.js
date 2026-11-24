@@ -3,6 +3,9 @@ import { CONFIG } from '../config.js';
 import { S, karte, teamPlaetze, teamSetzen, teamBauen, teamSlotWaehlen, teamSlotUmbenennen } from '../state.js';
 import { karteElement } from '../cardview.js';
 import { Sound } from '../audio.js';
+import { ARTEN } from '../species.js';
+
+const ROLLEN = Object.keys(CONFIG.rollen);
 import { staerke, kosten, plaetzeBelegt, plaetzeBringt } from '../rules.js';
 import { h, toast, fmt, ICON } from './dom.js';
 import { FILTER_STANDARD, SORTEN, datenLaden, passt, kartenWert, vergleich, filterFelder, filterChips } from './sammlung.js';
@@ -101,7 +104,12 @@ export function teamScreen(root, nav) {
       h('p', { class: 'leise', text: `Jede Karte belegt so viele Plätze wie ihr Teamplatz-Wert (mindestens 1). Grundvorrat ${CONFIG.kampf.teamGrundplaetze}, Karten mit Teamkapazität bringen weitere Plätze mit. Teamplatz wirkt als Angriffsmultiplikator.` }),
     );
     bauLeiste.replaceChildren(...bauFelder());
-    teamReihe.replaceChildren(...(S.d.team.length ? S.d.team.map((i) => mini(i, (j) => { teamSetzen(S.d.team.filter((x) => x !== j)); zeichne(); }, 'im-team')) : [h('p', { class: 'leise', text: 'Noch leer. Tippe unten Karten an oder stelle automatisch auf.' })]));
+    // Nach Rollen sortiert und gruppiert [Nutzer, 24.11.2026], innerhalb der Rolle nach Stärke
+    const entfernen = (j) => { teamSetzen(S.d.team.filter((x) => x !== j)); zeichne(); };
+    const gruppen = ROLLEN.map((r) => ({ r, karten: S.d.team.filter((i) => ARTEN[karte(i).art].rolle === r).sort((x, y) => staerke(karte(y).a) - staerke(karte(x).a)) })).filter((g) => g.karten.length);
+    teamReihe.replaceChildren(...(S.d.team.length ? gruppen.map((g) => h('div', { class: 'rollen-gruppe' },
+      h('h4', { text: `${CONFIG.rollen[g.r].name} · ${g.karten.length}` }),
+      h('div', { class: 'rollen-karten' }, g.karten.map((i) => mini(i, entfernen, 'im-team'))))) : [h('p', { class: 'leise', text: 'Noch leer. Tippe unten Karten an oder stelle automatisch auf.' })]));
     zeichneKandidaten();
   };
 

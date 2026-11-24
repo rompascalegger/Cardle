@@ -1,4 +1,5 @@
-// Kampagne v4 [Nutzer, 21.11.2026]: Für jedes Element eine Dimension, je Dimension 8 Welten, je Welt 10 Stufen.
+// Kampagne v4 [Nutzer, 21.11.2026]: Für jedes Element eine Dimension, je Dimension 8 Welten, je Welt 12 Stufen (seit 24.11.2026).
+// 34. Bereich: Tiefer Kern (16 Welten), offen nach dem Kern; Gegnereffekte mit Seltenheit 2–5.
 // Dazu die 33. Dimension (Kern des Rads) mit 16 Welten, offen ab 2 fertigen Welten in jeder Dimension.
 // Welten haben eigene Namen und Landschafts-Themen. Gegner bauen ihr Team nach denselben Teamregeln wie der Spieler.
 import { CONFIG } from './config.js';
@@ -12,7 +13,11 @@ import { palette } from './monsterart.js';
 
 const K = CONFIG.kampagne;
 const KERN = CONFIG.kern;
+const TIEF = CONFIG.tiefKern;
 export const KERN_DIM = N; // Index 32
+export const TIEF_DIM = N + 1; // Index 33: Tiefer Kern [Nutzer, 24.11.2026]
+export const istKern = (d) => d === KERN_DIM || d === TIEF_DIM;
+const kernCfg = (d) => (d === TIEF_DIM ? TIEF : KERN);
 
 // ---------- Weltnamen und Themen ----------
 // Acht Landschaften und ein Eigenschaftswort je Element ergeben 256 eindeutige Namen, dazu 16 für den Kern.
@@ -23,30 +28,32 @@ export const ORTE = [
 const ADJ = ['Glühend', 'Geschmolzen', 'Rußig', 'Steinern', 'Kristallen', 'Salzig', 'Flutend', 'Wuchernd', 'Wild', 'Belebt', 'Bunt', 'Grübelnd', 'Geordnet', 'Schwer', 'Knisternd', 'Strahlend',
   'Gefroren', 'Versunken', 'Digital', 'Leer', 'Neblig', 'Verstrahlt', 'Eisern', 'Tickend', 'Künstlich', 'Sagenhaft', 'Ätzend', 'Atomar', 'Ungewiss', 'Verschlungen', 'Zeitlos', 'Finster'];
 const KERN_ADJ = ['Ewig', 'Jenseitig'];
+const TIEF_ADJ = ['Abgründig', 'Urzeitlich'];
 const ENDUNG = { f: 'e', m: 'er', n: 'es', p: 'e' };
 const ortVon = (w) => ORTE[(w - 1) % ORTE.length];
 export function weltName(d, w) {
   const o = ortVon(w);
-  const adj = d === KERN_DIM ? KERN_ADJ[Math.floor((w - 1) / ORTE.length)] : ADJ[d];
+  const adj = d === KERN_DIM ? KERN_ADJ[Math.floor((w - 1) / ORTE.length)] : d === TIEF_DIM ? TIEF_ADJ[Math.floor((w - 1) / ORTE.length)] : ADJ[d];
   return `${adj}${ENDUNG[o.g]} ${o.name}`;
 }
-export const dimensionName = (d) => (d === KERN_DIM ? 'Kern-Dimension' : `${ELEMENTE[d].name}-Dimension`);
+export const dimensionName = (d) => (d === KERN_DIM ? 'Kern-Dimension' : d === TIEF_DIM ? 'Tiefer Kern' : `${ELEMENTE[d].name}-Dimension`);
 
 // Gegnerelemente: Element der Dimension plus Abstände je Welt. Im Kern kämpfen Gegenpol-Paare.
 function weltElemente(d, w) {
   if (d === KERN_DIM) { const a = mod(w * 2), b = mod(w * 2 + 1); return [a, gegenpol(a), b, gegenpol(b)]; }
+  if (d === TIEF_DIM) { const a = mod(w * 5 + 1), b = mod(w * 7 + 3); return [a, gegenpol(a), b, gegenpol(b)]; }
   return [d, d, mod(d + w), mod(d - w)];
 }
 // Farbe/Element für Themen und Siegel
-export const themaElement = (d, w) => (d === KERN_DIM ? mod(w * 2) : d);
+export const themaElement = (d, w) => (d === KERN_DIM ? mod(w * 2) : d === TIEF_DIM ? mod(w * 5 + 1) : d);
 
 // ---------- Aufbau ----------
 function aufbauen() {
   const dims = [];
   const alle = [];
-  for (let d = 0; d <= KERN_DIM; d++) {
-    const kern = d === KERN_DIM;
-    const anzahlWelten = kern ? KERN.welten : K.weltenProDimension;
+  for (let d = 0; d <= TIEF_DIM; d++) {
+    const kern = istKern(d), KC = kernCfg(d), tief = d === TIEF_DIM;
+    const anzahlWelten = kern ? KC.welten : K.weltenProDimension;
     const welten = [];
     for (let w = 1; w <= anzahlWelten; w++) {
       const stufen = [];
@@ -54,13 +61,13 @@ function aufbauen() {
         const weltBoss = l === K.stufenProWelt, zwischenboss = l === K.zwischenbossStufe;
         const index = (w - 1) * K.stufenProWelt + (l - 1);
         const bossMal = weltBoss ? K.bossFaktor : zwischenboss ? K.zwischenbossFaktor : 1;
-        const basis = kern ? Math.min(KERN.staerkeMax, KERN.staerkeStart * KERN.wachstumProStufe ** index * bossMal) : K.staerkeBasis * K.wachstumProStufe ** index * bossMal;
+        const basis = kern ? Math.min(KC.staerkeMax, KC.staerkeStart * KC.wachstumProStufe ** index * bossMal) : K.staerkeBasis * K.wachstumProStufe ** index * bossMal;
         const k = {
-          id: `d${d}w${w}l${l}`, dim: d, kern, welt: w, stufe: l, weltBoss, zwischenboss, boss: weltBoss || zwischenboss,
+          id: `d${d}w${w}l${l}`, dim: d, kern, tief, welt: w, stufe: l, weltBoss, zwischenboss, boss: weltBoss || zwischenboss,
           name: weltBoss ? 'Weltenboss' : zwischenboss ? 'Zwischenboss' : `Stufe ${l}`, basis,
-          leben: weltBoss ? K.lebenWeltBoss(w) + (kern ? 4 : 0) : zwischenboss ? K.lebenZwischenboss(w) + (kern ? 2 : 0) : K.lebenNormal,
+          leben: weltBoss ? K.lebenWeltBoss(w) + (tief ? 6 : kern ? 4 : 0) : zwischenboss ? K.lebenZwischenboss(w) + (tief ? 3 : kern ? 2 : 0) : K.lebenNormal,
           els: weltElemente(d, w),
-          startBank: (kern ? KERN.gegnerStartBank(w, l) : K.gegnerStartBank(w, l)) + (weltBoss ? 5 : 0),
+          startBank: (kern ? KC.gegnerStartBank(w, l) : K.gegnerStartBank(w, l)) + (weltBoss ? 5 : 0),
         };
         stufen.push(k);
         alle.push(k);
@@ -84,7 +91,9 @@ export const weltenFertigIn = (fort, d) => DIMENSIONEN[d].welten.filter((w) => w
 export const dimensionFertig = (fort, d) => weltenFertigIn(fort, d) === DIMENSIONEN[d].welten.length;
 // Kern: offen, wenn in jeder der 32 Dimensionen mindestens 2 Welten fertig sind
 export const kernOffen = (fort) => DIMENSIONEN.slice(0, KERN_DIM).every((_, d) => weltenFertigIn(fort, d) >= KERN.freiAbWeltenJeDimension);
-export const dimensionOffen = (fort, d) => d !== KERN_DIM || kernOffen(fort);
+// Tiefer Kern: offen, wenn alle Welten der Kern-Dimension fertig sind
+export const tiefOffen = (fort) => dimensionFertig(fort, KERN_DIM);
+export const dimensionOffen = (fort, d) => (d === KERN_DIM ? kernOffen(fort) : d === TIEF_DIM ? tiefOffen(fort) : true);
 export const weltOffen = (fort, d, w) => dimensionOffen(fort, d) && (w === 1 || weltFertig(fort, d, w - 1));
 export function freigeschaltet(fort, k) {
   if (!weltOffen(fort, k.dim, k.welt)) return false;
@@ -103,7 +112,7 @@ export const weltenGesamt = () => DIMENSIONEN.reduce((s, d) => s + d.welten.leng
 // Stärke und Beschwörung hängen vom Gesamtfortschritt ab: je mehr Welten fertig, desto härter
 export function kampfWerte(k, fort) {
   const fertig = weltenFertig(fort);
-  if (k.kern) return { staerke: Math.round(k.basis), einkommen: KERN.gegnerEinkommen(k.welt, k.stufe) + (k.weltBoss ? 3 : 0), startBank: k.startBank, faktor: 1 };
+  if (k.kern) return { staerke: Math.round(k.basis), einkommen: kernCfg(k.dim).gegnerEinkommen(k.welt, k.stufe) + (k.weltBoss ? 3 : 0), startBank: k.startBank, faktor: 1 };
   return {
     staerke: Math.round(k.basis * K.fortschrittFaktor(fertig)),
     einkommen: K.gegnerEinkommen(k.welt, k.stufe, fertig) + (k.weltBoss ? 2 : 0),
@@ -119,6 +128,7 @@ const GEGNER_ARTEN = ARTEN.filter((a) => !a.silber);
 const BOSS_STARK = ['zauberbann', 'gegenpolbann', 'erzfeindjaeger', 'spiegel', 'regeneration', 'schnellschlag', 'flaechenwirbel', 'ruestung', 'durchdringen', 'rettungsanker', 'verstaerker', 'wildesherz', 'zielsuche', 'zweiteratem']
   .map((key) => EFFEKTE.find((e) => e.key === key).id);
 const AUFERSTEHUNG = EFFEKTE.find((e) => e.key === 'auferstehung').id;
+const SKALIERT = EFFEKTE.filter((e) => e.skaliert).map((e) => e.id);
 
 // Gegnerteam mit Zielstärke, nach denselben Teamregeln wie beim Spieler (Grundplätze + Teamkapazität)
 // Stärkekurve als Funktion (für die Balance-Simulation mit anderen Parametern)
@@ -136,7 +146,9 @@ export function gegnerTeam(k, fort = {}, zielVorgabe = null) {
   let rest = ziel;
   let frei = CONFIG.kampf.teamGrundplaetze;
   const gewuenscht = Math.max(3, Math.min(24, Math.round(ziel / 45)));
-  const fxChance = k.kern ? KERN.effektChance(k.welt) : K.effektChance(k.welt, k.stufe);
+  const fxChance = k.kern ? kernCfg(k.dim).effektChance(k.welt) : K.effektChance(k.welt, k.stufe);
+  // Tiefer Kern: Effekte mit Seltenheit 2–5, vor allem die neuen, skalierenden Effekte
+  const fxStufe = k.tief ? TIEF.effektStufe(k.welt) : 1;
   const kommandanten = GEGNER_ARTEN.filter((a) => a.rolle === 'kommandant' && k.els.includes(a.el));
   for (let n = 0; n < 40 && rest > 0; n++) {
     const verbleibend = Math.max(1, gewuenscht - karten.length);
@@ -152,10 +164,12 @@ export function gegnerTeam(k, fort = {}, zielVorgabe = null) {
       if (k.weltBoss && karten.length === 0) fx.push(AUFERSTEHUNG);
       while (fx.length < (k.weltBoss && karten.length === 0 ? 3 : 2)) fx.push(stark.splice(Math.floor(rng.next() * stark.length), 1)[0]);
       z = Math.min(88, Math.round(z * (karten.length === 0 ? 1.5 : 1.25)));
+      if (k.tief) fx.push(SKALIERT[Math.floor(rng.next() * SKALIERT.length)]);
     } else if (rng.next() < fxChance) {
-      fx.push(GEGNER_EFFEKTE[Math.floor(rng.next() * GEGNER_EFFEKTE.length)]);
+      const pool = k.tief && rng.next() < 0.8 ? SKALIERT : GEGNER_EFFEKTE;
+      fx.push(pool[Math.floor(rng.next() * pool.length)]);
     }
-    const c = gegnerKarte(rng, art.id, z, fx);
+    const c = gegnerKarte(rng, art.id, z, [...new Set(fx)], null, fxStufe);
     while (plaetzeBelegt(c) > frei + plaetzeBringt(c) && c.a.teamplatz > 0) c.a.teamplatz--;
     if (plaetzeBelegt(c) > frei + plaetzeBringt(c)) break;
     frei += plaetzeBringt(c) - plaetzeBelegt(c);
@@ -173,13 +187,13 @@ export function teamInfo(karten) {
 
 // ---------- Belohnungen ----------
 export function belohnung(k, ersterSieg = true) {
-  const B = K.belohnung, w = k.kern ? k.welt + 8 : k.welt, l = k.stufe;
+  const B = K.belohnung, w = k.tief ? k.welt + 24 : k.kern ? k.welt + 8 : k.welt, l = k.stufe;
   let packs, muenzen;
   if (k.weltBoss) { packs = B.weltBossPacks(w); muenzen = B.weltBossMuenzen(w); }
   else if (k.zwischenboss) { packs = B.zwischenbossPacks(w); muenzen = B.zwischenbossMuenzen(w); }
   else { packs = B.stufePacks(w, l); muenzen = B.stufeMuenzen(w, l); }
   if (!ersterSieg) { packs = Math.max(1, Math.round(packs * K.wiederholungsAnteil)); muenzen = Math.round(muenzen * K.wiederholungsAnteil); }
-  const welt = k.weltBoss && ersterSieg ? (k.kern ? KERN.weltBelohnung(k.welt) : K.weltBelohnung(k.welt)) : null;
+  const welt = k.weltBoss && ersterSieg ? (k.kern ? kernCfg(k.dim).weltBelohnung(k.welt) : K.weltBelohnung(k.welt)) : null;
   return { packs, muenzen, welt };
 }
 

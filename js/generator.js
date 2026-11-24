@@ -1,7 +1,7 @@
 // Kartenerzeugung und Pack-Öffnung. [FEST 10.1] Alle Zufallswerte stehen beim Öffnen fest.
 import { CONFIG, KLASSEN, LOOKS } from './config.js';
 import { ATTR_KEYS, leereAttribute } from './attributes.js';
-import { PACK_EFFEKTE } from './effects.js';
+import { PACK_EFFEKTE, EFFEKT } from './effects.js';
 import { ARTEN, ARTEN_GEWICHTE } from './species.js';
 import { klasseFuerWurf, klassenGrenzen, holoFuerWurf, pityChance, staerke } from './rules.js';
 
@@ -45,6 +45,16 @@ function waehleEffekte(rng, n) {
   for (let i = 0; i < n && pool.length; i++) out.push(pool.splice(Math.floor(rng.next() * pool.length), 1)[0]);
   return out;
 }
+// Seltenheit je Effekt [Nutzer, 24.11.2026]: bestehende Effekte immer Stufe 1, neue (skalierende) würfeln 1–5
+export function wuerfleEffektStufen(rng, fx, mindest = 1) {
+  const ch = CONFIG.effektStufen.chancen;
+  return fx.map((id) => {
+    if (!EFFEKT[id].skaliert) return 1;
+    let u = rng.next(), st = 1;
+    for (let i = 0; i < ch.length; i++) { if (u < ch[i]) { st = i + 1; break; } u -= ch[i]; }
+    return Math.max(mindest, st);
+  });
+}
 
 // Eine Karte auswürfeln. Reihenfolge [VORSCHLAG 10.2]. Gibt Karte und die rohen Würfe zurück (für die Animation).
 // Artenauswahl: alle Arten oder nur die eines Elements (Elementpack), jeweils mit Ziehgewichten
@@ -81,14 +91,15 @@ export function wuerfleKarte(rng, effektChance, erzwingeEffekt = false, mult = 1
   }
   wuerfe.effekt = rng.next();
   wuerfe.effektChance = effektChance;
-  let fx = [];
+  let fx = [], fxs = [];
   const treffer = erzwingeEffekt || wuerfe.effekt < effektChance;
   if (treffer) {
     wuerfe.effektAnzahl = rng.next();
     fx = waehleEffekte(rng, effektAnzahl(wuerfe.effektAnzahl));
+    fxs = wuerfleEffektStufen(rng, fx);
   }
   wuerfe.pity = erzwingeEffekt;
-  return { karte: { art: art.id, kl, a, holo, looks, fx }, wuerfe };
+  return { karte: { art: art.id, kl, a, holo, looks, fx, fxs }, wuerfe };
 }
 
 // Ein Pack öffnen. pityZaehler = Packs seit der letzten Effektkarte. [FEST 18.3]
@@ -110,7 +121,7 @@ export function oeffnePack(rng, pityZaehler, { mult = 1, groesse = CONFIG.packGr
 }
 
 // Gegnerkarte mit Zielstärke (für Kampagne) – nutzt dieselbe Verteilung, aber feste Klasse
-export function gegnerKarte(rng, artId, zielStaerke, effekte = [], klFest = null) {
+export function gegnerKarte(rng, artId, zielStaerke, effekte = [], klFest = null, fxStufen = 1) {
   const art = ARTEN[artId];
   let kl = 0;
   for (let i = 0; i < KLASSEN.length; i++) if (zielStaerke >= KLASSEN[i].min) kl = i;
@@ -118,7 +129,10 @@ export function gegnerKarte(rng, artId, zielStaerke, effekte = [], klFest = null
   const K = KLASSEN[kl];
   const summe = Math.max(K.min, Math.min(K.max, zielStaerke));
   const a = verteilePunkte(rng, summe, art.rolle);
-  return { art: art.id, kl, a, holo: 'keins', looks: 0, fx: effekte.slice(0, 3) };
+  const fx = effekte.slice(0, 3);
+  // fxStufen: feste Stufe (Zahl, für alle skalierenden Effekte) oder Liste; bestehende Effekte bleiben Stufe 1
+  const fxs = fx.map((id, i) => (EFFEKT[id].skaliert ? (Array.isArray(fxStufen) ? fxStufen[i] || 1 : fxStufen || 1) : 1));
+  return { art: art.id, kl, a, holo: 'keins', looks: 0, fx, fxs };
 }
 
 export { staerke };

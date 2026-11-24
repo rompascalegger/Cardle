@@ -6,7 +6,7 @@ import { Sound } from '../audio.js';
 import { farbton, farbe, ELEMENTE } from '../elements.js';
 import { ARTEN } from '../species.js';
 import { monsterBild } from '../monsterart.js';
-import { EFFEKT } from '../effects.js';
+import { EFFEKT, effektText } from '../effects.js';
 import { klassenGrenzen, holoGrenzen, prozent, pityChance, seltenheitsChancen, einsVon, pHolo, pEffekte } from '../rules.js';
 import { h, warte, anim, toast, schuetteln, partikel, blitzLicht, konfetti, ICON, fmt } from './dom.js';
 import { karteVergroessern } from './lupe.js';
@@ -563,7 +563,7 @@ class Zeremonie {
     partikel(r.left + r.width / 2, r.top + r.height / 2, { anzahl: 90, farben: ['#ffd447', '#fff', '#ff9b2f', '#ff5fd2'], weite: 420, dauer: 1600, groesse: 9 });
     const b = this.q('.oe-banner');
     b.style.setProperty('--bf', '#ffd447');
-    b.innerHTML = `<span>✦ Spezialeffekt${c.fx.length > 1 ? 'e' : ''} ✦</span>${c.fx.map((id, i) => `<small class="fx-zeile" style="animation-delay:${(0.35 + i * 0.5).toFixed(2)}s">${esc(EFFEKT[id].name)} · ${esc(EFFEKT[id].wirkung)}</small>`).join('')}`;
+    b.innerHTML = `<span>✦ Spezialeffekt${c.fx.length > 1 ? 'e' : ''} ✦</span>${c.fx.map((id, i) => `<small class="fx-zeile" style="animation-delay:${(0.35 + i * 0.5).toFixed(2)}s;--fxc:${CONFIG.effektStufen.farben[(c.fxs?.[i] || 1) - 1]}">${esc(EFFEKT[id].name)} (${CONFIG.effektStufen.namen[(c.fxs?.[i] || 1) - 1]}) · ${esc(effektText(id, c.fxs?.[i] || 1))}</small>`).join('')}`;
     b.classList.remove('an', 'lang'); void b.offsetWidth; b.classList.add('an', 'lang');
     for (let i = 0; i < c.fx.length; i++) setTimeout(() => { Sound.stufe(10 + i); blitzLicht('#fff3b0', 0.3); }, this.D(350 + i * 500));
     await this.warteD(1600 + c.fx.length * 600);

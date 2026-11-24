@@ -82,7 +82,7 @@ export function passt(x, F = ALBUM_F) {
 const kartenFilterAktiv = () => ['suche', 'klMin', 'klMax', 'stufeMin', 'holo', 'look', 'fx', 'attrMin', 'staerkeMin', 'kostenMax', 'team', 'fav'].some((k) => F[k] !== STANDARD[k]);
 
 export const SORTEN = [
-  ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
+  ['nr', 'Nummer'], ['name', 'Name'], ['element', 'Element'], ['rolle', 'Rolle'], ['staerke', 'Stärke'], ['klasse', 'Klasse'], ['seltenheit', 'Seltenheit'],
   ['kosten', 'Beschwörungskosten'], ['wert', 'Verkaufswert'], ['neu', 'Neueste'],
   ...ATTRIBUTE.map((a) => ['attr:' + a.key, a.name]),
   ['anzahl', 'Anzahl (Monster)'], ['ausf', 'Ausführungen (Monster)'],
@@ -97,6 +97,7 @@ export function kartenWert(x, F = ALBUM_F) {
     case 'kosten': return x.kost;
     case 'wert': return verkaufswert(x.c);
     case 'neu': return x.i;
+    case 'rolle': return Object.keys(CONFIG.rollen).indexOf(x.art.rolle) * 1000 + x.sum;
     default:
       if (F.sort.startsWith('attr:')) return x.c.a[F.sort.slice(5)] || 0;
       return x.art.id;

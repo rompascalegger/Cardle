@@ -93,16 +93,14 @@ export function kampfWert(c) {
     + (a.seltsamkeit || 0) * 0.5 + (a.teamplatz || 0) * 0.8 + (a.kapazitaet || 0) * 0.3 + (c.fx?.length || 0) * 3;
 }
 export const hatEffekt = (c, key) => c.fx.some((id) => EFFEKT[id].key === key);
-// [ANNAHME 9.6, geändert 24.11.2026 nach Spielerfeedback] Früher: Produkt der Preisfaktoren (3 Effekte bis ×24, Karten mit 288 Kosten).
-// Jetzt: Aufschläge addieren sich und werden gedämpft, mit Deckel. Ein Effekt ×1,15–×1,9, höchstens ×2.
-export function preisFaktor(c) {
-  const P = CONFIG.kampf.effektPreis;
-  const aufschlag = c.fx.reduce((s, id) => s + (EFFEKT[id].faktor - 1), 0);
-  return Math.min(P.deckel, 1 + P.daempfung * aufschlag);
-}
-// Kosten = Stärke × Preisfaktor. [OFFEN] Rundung → Platzhalter.
+// Effekt-Seltenheit 1–5 (grün, blau, violett, golden, rot) [Nutzer, 24.11.2026]. Jeder Effekt kostet +Seltenheit Beschwörungspunkte.
+export const effektStufe = (c, i) => c.fxs?.[i] || 1;
+export const effektAufschlag = (c) => c.fx.reduce((s, _, i) => s + effektStufe(c, i), 0);
+// Für die KI-Bewertung (Wert einer Karte): 1 + Aufschlag je Stärke
+export function preisFaktor(c) { const st = staerke(c.a); return st > 0 ? 1 + effektAufschlag(c) / st : 1; }
+// Kosten = Stärke + Summe der Effekt-Seltenheiten. [OFFEN] Rundung → Platzhalter.
 export function kosten(c) {
-  const roh = staerke(c.a) * preisFaktor(c);
+  const roh = staerke(c.a) + effektAufschlag(c);
   const r = CONFIG.kampf.kostenRundung === 'ceil' ? Math.ceil(roh) : Math.round(roh);
   return Math.max(1, r);
 }
@@ -113,8 +111,8 @@ export function plaetzeBelegt(c) {
 }
 export function plaetzeBringt(c) {
   let n = c.a.kapazitaet || 0;
-  if (hatEffekt(c, 'platzspender')) n += 2;
-  if (hatEffekt(c, 'platzfresser')) n += 5;
+  if (hatEffekt(c, 'platzspender')) n += 4;
+  if (hatEffekt(c, 'platzfresser')) n += 8;
   return n;
 }
 export const teamplatzMult = (tp) => 1 + CONFIG.kampf.teamplatzMultProPunkt * (tp || 0);
@@ -144,7 +142,8 @@ export function kodiere(c) {
   let s = b36(c.art, 2) + c.kl.toString(36);
   for (const k of ATTR_KEYS) s += Math.min(35, c.a[k] || 0).toString(36);
   s += HOLO_STUFEN.indexOf(c.holo).toString(36) + c.looks.toString(36);
-  for (const id of c.fx) s += b36(id, 2);
+  // Effekt-Seltenheit (Stufe 1–5) steckt im Code: id + 200 × (Stufe − 1). Alte Karten lesen sich als Stufe 1.
+  c.fx.forEach((id, i) => { s += b36(id + 200 * ((c.fxs?.[i] || 1) - 1), 2); });
   return s;
 }
 const ALTE_KEYS = ATTR_KEYS.filter((k) => k !== 'heilung');
@@ -156,7 +155,8 @@ export function dekodiere(s) {
   if (alt) a.heilung = 0;
   const h = 3 + keys.length;
   const fx = [];
-  for (let i = h + 2; i + 1 < s.length; i += 2) fx.push(parseInt(s.slice(i, i + 2), 36));
+  const fxs = [];
+  for (let i = h + 2; i + 1 < s.length; i += 2) { const n = parseInt(s.slice(i, i + 2), 36); fx.push(n % 200); fxs.push(Math.floor(n / 200) + 1); }
   return {
     art: parseInt(s.slice(0, 2), 36),
     kl: parseInt(s[2], 36),
@@ -164,6 +164,7 @@ export function dekodiere(s) {
     holo: HOLO_STUFEN[parseInt(s[h], 36)],
     looks: parseInt(s[h + 1], 36),
     fx,
+    fxs,
   };
 }
 // Stapel = Monsterart, Ausführung = (Holo, Looks) [FEST 11.1]

@@ -843,3 +843,17 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 /* Teamwahl in der Kampfvorschau */
 .vs-teamwahl { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; color: var(--leise); text-transform: uppercase; font-size: .78rem; letter-spacing: .05em; }
 .vs-teamwahl select { flex: 1; max-width: 420px; text-transform: none; letter-spacing: 0; }
+/* Effektzeilen in der Zeremonie */
+.oe-banner .fx-zeile[style*="--fxc"] { color: var(--fxc); text-shadow: 0 0 10px color-mix(in srgb, var(--fxc) 70%, transparent); }
+.eh-fx span[style*="--fxc"] { color: var(--fxc); }
+
+/* Kompakte Filter [Nutzer, 24.11.2026: zu viel Platz]: dichtes Raster, kleine Beschriftung, keine gestreckten Zeilen */
+.sm-filterbox { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; margin-top: 10px; padding-top: 10px; align-content: start; align-items: start; grid-auto-rows: min-content; }
+.sm-filterbox label { gap: 2px; font-size: .68rem; }
+.sm-filterbox select, .sm-filterbox input[type=search], .sm-filterbox input[type=number] { padding: 4px 8px; font-size: .82rem; min-height: 0; height: 30px; }
+.kand-kopf { align-items: stretch; justify-content: flex-start; height: auto; flex-wrap: nowrap; }
+
+/* Team nach Rollen gruppiert */
+.team-reihe { flex-direction: column; gap: 10px; }
+.rollen-gruppe h4 { margin: 0 0 6px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--leise); }
+.rollen-karten { display: flex; flex-wrap: wrap; gap: 12px; }

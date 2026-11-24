@@ -65,6 +65,12 @@ export const CONFIG = {
   holo: { reverse: 0.01, holo: 0.005, secret: 0.001, ghost: 0.0002 }, // [FEST] Chance pro Karte, schließen sich aus. Ghost Rare [Nutzer, 21.11.2026]: neue, seltenste Holo-Stufe
   lookChance: 0.005, // [FEST] je Zusatzlook, unabhängig
 
+  // Effekt-Seltenheit [Nutzer, 24.11.2026]: Stufe 1–5, kostet +Stufe Beschwörungspunkte. Neue Effekte wirken je Stufe stärker (bis ×5).
+  effektStufen: {
+    namen: ['Gewöhnlich', 'Selten', 'Episch', 'Legendär', 'Mythisch'],
+    farben: ['#3ddc84', '#3d9bff', '#b066ff', '#ffc83d', '#ff4d5e'],
+    chancen: [0.55, 0.25, 0.12, 0.06, 0.02], // Würfel für skalierende Effekte
+  },
   effekte: {
     mind1: 0.003, // [Nutzer, 21.11.2026] etwas häufiger: 0,3 % statt 0,1 % mindestens ein Effekt
     // [ANNAHME 9.3] daraus: genau 1 = 0,05 %, genau 2 = 0,04 %, genau 3 = 0,01 %. Als bedingte Anteile:
@@ -110,8 +116,7 @@ export const CONFIG = {
     teamplatzMinPlaetze: 1,
     // [OFFEN] Rundung der Beschwörungskosten. Platzhalter: kaufmännisch, mindestens 1.
     kostenRundung: 'round',
-    // Preisaufschlag für Spezialeffekte: 1 + Dämpfung × Summe(Faktor − 1), höchstens Deckel [Spielerfeedback 24.11.2026]
-    effektPreis: { daempfung: 0.3, deckel: 2 },
+
     rundenLimit: 80, // [OFFEN] Platzhalter gegen Endlos-Patts
     // [ANNAHME 5.4] Teamplatz-Multiplikator wirkt auf den Schaden ([OFFEN], Platzhalter).
     effektStart: 'naechsterZug', // [FEST] außer Blitz
@@ -146,10 +151,10 @@ export const CONFIG = {
   // je Dimension 8 Welten, je Welt 10 Stufen (Stufe 5 Zwischenboss, Stufe 10 Weltenboss) = 2560 Kämpfe.
   // Alle Dimensionen sind offen, die Welten einer Dimension der Reihe nach. Karte auf dem Elementrad.
   kampagne: {
-    version: 4,
+    version: 5, // v5: 12 Stufen je Welt, Fortschritt wird übernommen
     weltenProDimension: 8,
-    stufenProWelt: 10,
-    zwischenbossStufe: 5,
+    stufenProWelt: 12, // [Nutzer, 24.11.2026] Stufen 9–12 dazu (vorher 10), Weltenboss jetzt auf Stufe 12
+    zwischenbossStufe: 6,
     // Werte aus der Balance-Simulation (23.11.2026, 1,09 Mio. Spiele, 10 Teamtypen):
     // die besten Aufstellungen gewinnen im Schnitt ~54 %, der Median ~2 %. Nur gute Teams kommen durch.
     staerkeBasis: 193, // Teamstärke des ersten Gegners einer Dimension
@@ -192,6 +197,17 @@ export const CONFIG = {
     gegnerStartBank: (w, l) => 40 + 6 * w + 2 * l,
     effektChance: (w) => Math.min(0.75, 0.4 + 0.02 * w),
     weltBelohnung: (w) => ({ gluecks: 2 + Math.floor(w / 4), element: 2, muenzen: 20000 + 2000 * w }),
+  },
+
+  // [Nutzer, 24.11.2026] Tiefer Kern: 16 weitere Welten nach dem Kern, Gegnereffekte mit Seltenheit 2–5
+  tiefKern: {
+    welten: 16,
+    staerkeStart: 1600, wachstumProStufe: 1.006, staerkeMax: 3600,
+    gegnerEinkommen: (w, l) => 30 + w + Math.floor(l / 3),
+    gegnerStartBank: (w, l) => 60 + 8 * w + 2 * l,
+    effektChance: (w) => Math.min(0.9, 0.55 + 0.02 * w),
+    effektStufe: (w) => Math.min(5, 2 + Math.floor((w - 1) / 4)), // Welt 1–4: 2, 5–8: 3, 9–12: 4, 13–16: 5
+    weltBelohnung: (w) => ({ gluecks: 4 + Math.floor(w / 3), element: 3, muenzen: 60000 + 6000 * w }),
   },
 
   // [Nutzer, 21.11.2026] Erfolgspack: eins je Erfolg zum Abholen, 10 Karten, seltene Chancen ×5

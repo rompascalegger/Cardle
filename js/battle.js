@@ -16,9 +16,10 @@ export function neueEinheit(c, seite, rng) {
     el: art.el, elZug: art.el,
     a: { ...c.a }, basis: staerke(c.a), schaden: 0,
     fx: c.fx.map((id) => EFFEKT[id].key), kopie: null,
+    fxStufe: Object.fromEntries(c.fx.map((id, i) => [EFFEKT[id].key, c.fxs?.[i] || 1])), gift: [], bannBis: -1, spiegelTreffer: 0, ersterAngriff: true,
     kost: kosten(c), preis: preisFaktor(c),
     beschworen: -1, aktivAb: Infinity, gebanntZug: -1,
-    atemGenutzt: false, enthuellt: false, spiegelZug: -1,
+    atemGenutzt: false, enthuellt: false, spiegelZug: -1, ankerZaehler: 0,
     tot: false, todZug: -1, aufruesterZiel: null, buff: [],
     falschEl: null, aktiviert: false, herzAktiv: false,
   };
@@ -49,17 +50,20 @@ export function aktiv(b, u, key) {
   if (!(u.fx.includes(key) || u.kopie === key)) return false;
   if (b.zug < u.aktivAb) return false;
   if (u.gebanntZug === b.zug) return false;
-  if (u.tot) return u.fx.includes('nachbrenner') && b.zug <= u.todZug + 1;
+  if (u.tot) return u.fx.includes('nachbrenner') && b.zug <= u.todZug + 2;
   return true;
 }
 function quellen(b, s) {
   const seite = b.seiten[s];
-  return lebend(seite).concat(seite.friedhof.filter((u) => u.fx.includes('nachbrenner') && b.zug <= u.todZug + 1));
+  return lebend(seite).concat(seite.friedhof.filter((u) => u.fx.includes('nachbrenner') && b.zug <= u.todZug + 2));
 }
 export const seiteAktiv = (b, s, key) => quellen(b, s).some((u) => aktiv(b, u, key));
 const zaehle = (b, s, key, f = () => true) => quellen(b, s).filter((u) => aktiv(b, u, key) && f(u)).length;
+// Stufe (Seltenheit 1–5) eines Effekts auf dieser Einheit
+export const stufe = (u, key) => u.fxStufe?.[key] || 1;
+const klein = (u) => (u.a.groesse || 0) <= 1;
 
-export function maxLeben(b, u) { return staerke(u.a) + (aktiv(b, u, 'gigant') ? u.a.groesse : 0); }
+export function maxLeben(b, u) { return staerke(u.a) + (aktiv(b, u, 'gigant') ? 2 * u.a.groesse : 0); }
 export const restLeben = (b, u) => maxLeben(b, u) - u.schaden;
 
 // Wirksame Werte eines Monsters in diesem Zug
@@ -67,24 +71,32 @@ export function werte(b, u) {
   const s = u.seite;
   const eigene = lebend(b.seiten[s]);
   let kraft = u.a.kraft;
-  kraft += zaehle(b, s, 'elementverstaerker', (q) => q.el === u.el);
-  kraft += zaehle(b, s, 'nachbarschaft', (q) => q.uid !== u.uid && (mod(q.el - u.el) === 1 || mod(u.el - q.el) === 1));
-  kraft += quellen(b, s).filter((q) => aktiv(b, q, 'aufruester') && q.aufruesterZiel === u.uid).length;
-  for (const bf of u.buff) if (b.zug <= bf.bis) kraft += bf.kraft;
-  if (aktiv(b, u, 'schwarmgeist')) kraft += Math.min(3, eigene.filter((q) => q.uid !== u.uid && q.el === u.el).length);
+  kraft += 2 * zaehle(b, s, 'elementverstaerker', (q) => q.el === u.el);
+  kraft += 2 * zaehle(b, s, 'nachbarschaft', (q) => q.uid !== u.uid && (mod(q.el - u.el) === 1 || mod(u.el - q.el) === 1));
+  kraft += 3 * quellen(b, s).filter((q) => aktiv(b, q, 'aufruester') && q.aufruesterZiel === u.uid).length;
+  let schutzBuff = 0;
+  for (const bf of u.buff) if (b.zug <= bf.bis) { kraft += bf.kraft || 0; schutzBuff += bf.schutz || 0; }
+  if (aktiv(b, u, 'schwarmgeist')) kraft += Math.min(6, 2 * eigene.filter((q) => q.uid !== u.uid && q.el === u.el).length);
+  if (aktiv(b, u, 'zielsuche')) kraft += 1;
+  if (aktiv(b, u, 'elementwandel')) kraft += 2;
+  if (aktiv(b, u, 'fruehstart')) kraft += 1;
+  if (aktiv(b, u, 'zeitsprung') && u.beschworen === b.zug) kraft += 2;
+  if (aktiv(b, u, 'winzlingswut') && klein(u)) kraft += 2 * stufe(u, 'winzlingswut');
+  if (aktiv(b, u, 'rudelbiss')) { const n = stufe(u, 'rudelbiss'); kraft += Math.min(3 * n, n * eigene.filter((q) => q.uid !== u.uid && klein(q)).length); }
   const allein = eigene.length === 1 && eigene[0].uid === u.uid;
-  if (allein && aktiv(b, u, 'einzelgaenger')) kraft += 3;
-  const gleich = zaehle(b, 0, 'gleichgewicht') + zaehle(b, 1, 'gleichgewicht');
-  if (gleich && staerke(u.a) > 20) kraft -= gleich;
-  if (allein && aktiv(b, u, 'schlussakt')) kraft *= 2;
-  let schutz = u.a.schutz + zaehle(b, s, 'elementschild', (q) => q.el === u.el) + (aktiv(b, u, 'ruestung') ? 2 : 0);
+  if (allein && aktiv(b, u, 'einzelgaenger')) kraft += 6;
+  const gleich = zaehle(b, 1 - s, 'gleichgewicht'); // wirkt nur auf Gegnerkarten
+  if (gleich && staerke(u.a) > 20) kraft -= 3 * gleich;
+  if (allein && aktiv(b, u, 'schlussakt')) kraft *= 3;
+  let schutz = u.a.schutz + 2 * zaehle(b, s, 'elementschild', (q) => q.el === u.el) + (aktiv(b, u, 'ruestung') ? 4 : 0)
+    + (aktiv(b, u, 'koeder') ? 2 : 0) + (aktiv(b, u, 'tarnung') ? 1 : 0) + schutzBuff;
   return {
     kraft: Math.max(0, kraft),
     schutz: Math.max(0, schutz),
-    wild: u.a.wildheit * (aktiv(b, u, 'wildesherz') ? 2 : 1),
+    wild: u.a.wildheit * (aktiv(b, u, 'wildesherz') ? 3 : 1),
     groesse: u.a.groesse,
-    selt: u.a.seltsamkeit * (aktiv(b, u, 'seltsamewelt') ? 2 : 1),
-    schlag: u.a.schlagzahl + (aktiv(b, u, 'schnellschlag') ? 1 : 0),
+    selt: u.a.seltsamkeit * (aktiv(b, u, 'seltsamewelt') ? 3 : 1),
+    schlag: u.a.schlagzahl + (aktiv(b, u, 'schnellschlag') ? 2 : 0),
     mult: teamplatzMult(u.a.teamplatz),
   };
 }
@@ -99,33 +111,33 @@ export function faktorKampf(b, att, ziel, elA = att.elZug, elZ = ziel.elZug) {
   const fi = faktorInfo(elA, elZ);
   let f = fi.f;
   if (fi.art === 'gegenpol') {
-    if (seiteAktiv(b, att.seite, 'erzfeindjaeger')) f = 3.0;
-    if (seiteAktiv(b, ziel.seite, 'gegenpolbann')) f = 1.5;
+    if (seiteAktiv(b, att.seite, 'erzfeindjaeger')) f = 3.5;
+    if (seiteAktiv(b, ziel.seite, 'gegenpolbann')) f = 1.0;
   }
-  if (aktiv(b, ziel, 'schwarzerwirbel')) f = Math.max(0.1, f - 0.1);
+  if (aktiv(b, ziel, 'schwarzerwirbel')) f = Math.max(0.1, f - 0.4);
   return { f, art: fi.art };
 }
 // [FEST 5.4] Schaden = Kraft × Faktor / (Schutz + 1), dazu [OFFEN, Platzhalter] Teamplatz-Multiplikator
 export function schadenFuer(b, att, ziel, punkte, wahllos = false, wa = werte(b, att), elA, elZ) {
   const { f, art } = faktorKampf(b, att, ziel, elA, elZ);
-  const ff = f * (wahllos ? 1.5 : 1);
+  const ff = f * (wahllos ? 2 : 1) * (att.ersterAngriff && aktiv(b, att, 'rueckseite') ? 1.5 : 1);
   const wz = werte(b, ziel);
-  const P = Math.max(0, wz.schutz - (aktiv(b, att, 'durchdringen') ? 2 : 0));
+  const P = Math.max(0, wz.schutz - (aktiv(b, att, 'durchdringen') ? 4 : 0));
   return { schaden: (punkte * ff * wa.mult) / (P + 1), f: ff, art };
 }
 
 // ---------- Kosten ----------
 export function effektiveKosten(b, s, u) {
   let k = u.kost;
-  k -= zaehle(b, s, 'rudelruf', (q) => q.el === u.el);
-  if (staerke(u.a) < 5) k -= zaehle(b, s, 'sammelrabatt');
-  if (staerke(u.a) >= 30) k -= 5 * zaehle(b, s, 'schwergewicht');
+  k -= 3 * zaehle(b, s, 'rudelruf', (q) => q.el === u.el);
+  if (staerke(u.a) < 10) k -= 2 * zaehle(b, s, 'sammelrabatt');
+  if (staerke(u.a) >= 20) k -= 10 * zaehle(b, s, 'schwergewicht');
   return Math.max(0, k);
 }
 export function einkommen(b, s) {
-  let f = 1;
-  for (const q of quellen(b, s)) { if (aktiv(b, q, 'verstaerker')) f *= 3; if (aktiv(b, q, 'doppelrufer')) f *= 2; }
-  return (b.seiten[s].basisEinkommen ?? CONFIG.kampf.beschwoerungProZug) * f;
+  let f = 1, plus = 0;
+  for (const q of quellen(b, s)) { if (aktiv(b, q, 'verstaerker')) f *= 3; if (aktiv(b, q, 'doppelrufer')) { f *= 2; plus += 3; } }
+  return (b.seiten[s].basisEinkommen ?? CONFIG.kampf.beschwoerungProZug) * f + plus;
 }
 
 // ---------- Leben ----------
@@ -133,8 +145,8 @@ function verliereLeben(b, s, grund) {
   const seite = b.seiten[s];
   if (seite.lebenZug === b.zug) return; // [ANNAHME 12.5] höchstens 1 pro Runde
   seite.lebenZug = b.zug;
-  if (!seite.ankerGenutzt && seiteAktiv(b, s, 'rettungsanker')) {
-    seite.ankerGenutzt = true;
+  if ((seite.ankerZaehler || 0) < 2 && seiteAktiv(b, s, 'rettungsanker')) {
+    seite.ankerZaehler = (seite.ankerZaehler || 0) + 1;
     emit(b, { t: 'anker', seite: s });
     log(b, `${seite.name}: Rettungsanker fängt den Lebensverlust ab.`);
     return;
@@ -149,7 +161,7 @@ function stirb(b, u, killer) {
   const seite = b.seiten[u.seite];
   if (aktiv(b, u, 'zweiteratem') && !u.atemGenutzt) {
     u.atemGenutzt = true;
-    u.schaden = maxLeben(b, u) - 1;
+    u.schaden = Math.floor(maxLeben(b, u) / 2);
     emit(b, { t: 'atem', seite: u.seite, uid: u.uid });
     log(b, `${u.name} kommt mit Zweitem Atem zurück.`);
     return false;
@@ -161,19 +173,22 @@ function stirb(b, u, killer) {
     log(b, `${u.name} steht wieder auf, mit vollen Lebenspunkten!`);
     return false;
   }
+  // Todeseffekte vor dem Tod prüfen: danach gilt die Karte als tot und aktiv() wäre falsch (Fehler bis 24.11.2026)
+  const todFx = { letzterwille: aktiv(b, u, 'letzterwille'), lebenslicht: aktiv(b, u, 'lebenslicht'), erinnerung: aktiv(b, u, 'erinnerung') };
   u.tot = true; u.todZug = b.zug;
   const sp = seite.feld.indexOf(u);
   if (sp >= 0) seite.feld[sp] = null;
   seite.friedhof.push(u);
   emit(b, { t: 'tod', seite: u.seite, uid: u.uid, spalte: sp });
   log(b, `${u.name} wird ausgeschaltet.`);
-  if (aktiv(b, u, 'letzterwille')) {
-    for (const q of lebend(seite)) q.buff.push({ kraft: 2, bis: b.zug + 1 });
+  if (todFx.letzterwille) {
+    for (const q of lebend(seite)) q.buff.push({ kraft: 4, bis: b.zug + 2 });
+    log(b, `${u.name}: Letzter Wille, Verbündete +4 Elementarkraft.`);
     emit(b, { t: 'effekt', seite: u.seite, uid: u.uid, key: 'letzterwille' });
   }
-  if (u.herzAktiv) { seite.maxLeben--; seite.leben = Math.min(seite.leben, seite.maxLeben); u.herzAktiv = false; emit(b, { t: 'leben', seite: u.seite, delta: 0, leben: seite.leben, grund: 'Herzstück erlischt' }); }
-  if (aktiv(b, u, 'lebenslicht')) { seite.leben++; seite.maxLeben = Math.max(seite.maxLeben, seite.leben); emit(b, { t: 'leben', seite: u.seite, delta: 1, leben: seite.leben, grund: 'Lebenslicht' }); log(b, `${seite.name}: Lebenslicht schenkt ein Leben.`); }
-  if (aktiv(b, u, 'erinnerung')) freiBeschwoeren(b, u.seite, () => true, 'Erinnerung');
+  if (u.herzAktiv) { seite.maxLeben -= 2; seite.leben = Math.min(seite.leben, seite.maxLeben); u.herzAktiv = false; emit(b, { t: 'leben', seite: u.seite, delta: 0, leben: seite.leben, grund: 'Herzstück erlischt' }); }
+  if (todFx.lebenslicht) { seite.leben += 2; seite.maxLeben = Math.max(seite.maxLeben, seite.leben); emit(b, { t: 'leben', seite: u.seite, delta: 2, leben: seite.leben, grund: 'Lebenslicht' }); log(b, `${seite.name}: Lebenslicht schenkt zwei Leben.`); }
+  if (todFx.erinnerung) freiBeschwoeren(b, u.seite, () => true, 'Erinnerung');
   if (killer && !killer.tot && aktiv(b, killer, 'beutezug')) freiBeschwoeren(b, killer.seite, () => true, 'Beutezug');
   return true;
 }
@@ -202,6 +217,7 @@ export function beschwoere(b, s, handIdx, spalte = null, frei = false, grund = n
   const sp = platziere(seite, u, spalte);
   u.beschworen = b.zug;
   u.aktivAb = (u.fx.includes('fruehstart') || u.fx.includes('zeitsprung')) ? b.zug : b.zug + 1;
+  u.ersterAngriff = true;
   if (u.aktivAb <= b.zug) aktiviere(b, u);
   emit(b, { t: 'beschwoeren', seite: s, uid: u.uid, spalte: sp, kosten: k, frei, grund });
   log(b, `${seite.name} beschwört ${u.name}${frei ? ` kostenlos (${grund})` : ` für ${k}`}.`);
@@ -210,18 +226,50 @@ export function beschwoere(b, s, handIdx, spalte = null, frei = false, grund = n
     const ziele = lebend(gegner(b, s));
     if (ziele.length) {
       const z = ziele.reduce((best, t) => (restLeben(b, t) <= 3 && (!best || restLeben(b, best) > 3 || werte(b, t).kraft > werte(b, best).kraft) ? t : best), null) || ziele.reduce((x, y) => (werte(b, y).kraft > werte(b, x).kraft ? y : x));
-      z.schaden += 3;
-      emit(b, { t: 'blitz', seite: s, uid: u.uid, key: 'blitzschlag', ziel: z.uid, wert: 3, hpNach: restLeben(b, z) });
-      log(b, `Blitzschlag trifft ${z.name} für 3.`);
+      z.schaden += 6;
+      emit(b, { t: 'blitz', seite: s, uid: u.uid, key: 'blitzschlag', ziel: z.uid, wert: 6, hpNach: restLeben(b, z) });
+      log(b, `Blitzschlag trifft ${z.name} für 6.`);
       if (restLeben(b, z) <= 0) { stirb(b, z, u); pruefeAusgeloescht(b, z.seite, 'Blitzschlag'); }
     }
   }
   if (u.fx.includes('blitzheilung')) {
     const v = lebend(seite).filter((q) => q.schaden > 0).sort((x, y) => y.schaden - x.schaden)[0];
-    if (v) { const h = Math.min(5, v.schaden); v.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: v.uid, wert: h, quelle: u.uid }); log(b, `Blitzheilung heilt ${v.name} um ${h}.`); }
+    if (v) { const h = Math.min(10, v.schaden); v.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: v.uid, wert: h, quelle: u.uid }); log(b, `Blitzheilung heilt ${v.name} um ${h}.`); }
   }
-  if (u.fx.includes('blitzruf')) freiBeschwoeren(b, s, (q) => staerke(q.a) <= 3, 'Blitzruf');
+  if (u.fx.includes('blitzruf')) freiBeschwoeren(b, s, (q) => staerke(q.a) <= 8, 'Blitzruf');
+  eintrittsEffekte(b, s, u, sp);
   return true;
+}
+
+// Neue Eintrittseffekte (skalieren mit der Stufe) [Nutzer, 24.11.2026]
+function eintrittsEffekte(b, s, u, sp) {
+  const D = gegner(b, s);
+  const gegenueber = () => (D.feld[sp] && !D.feld[sp].tot ? D.feld[sp] : null);
+  const staerkster = () => lebend(D).sort((x, y) => werte(b, y).kraft - werte(b, x).kraft)[0] || null;
+  if (u.fx.includes('bann')) {
+    const z = gegenueber() || staerkster();
+    if (z) { const n = stufe(u, 'bann'); z.bannBis = Math.max(z.bannBis, b.zug + n - 1); emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'bann', ziel: z.uid }); log(b, `Bann: ${z.name} kann ${n} ${n === 1 ? 'Zug' : 'Züge'} nicht angreifen.`); }
+  }
+  if (u.fx.includes('eintrittsstich')) {
+    const z = gegenueber() || staerkster();
+    if (z) {
+      const n = 2 * stufe(u, 'eintrittsstich');
+      z.schaden += n;
+      emit(b, { t: 'blitz', seite: s, uid: u.uid, key: 'eintrittsstich', ziel: z.uid, wert: n, hpNach: restLeben(b, z) });
+      log(b, `Eintrittsstich trifft ${z.name} für ${n}.`);
+      if (restLeben(b, z) <= 0) { stirb(b, z, u); pruefeAusgeloescht(b, z.seite, 'Eintrittsstich'); }
+    }
+  }
+  if (u.fx.includes('schrumpfzauber')) {
+    const z = gegenueber() || staerkster();
+    if (z) { const n = 2 * stufe(u, 'schrumpfzauber'); z.buff.push({ kraft: -n, bis: b.zug + 1 }); emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'schrumpfzauber', ziel: z.uid }); log(b, `Schrumpfzauber: ${z.name} −${n} Elementarkraft für zwei Züge.`); }
+  }
+  if (u.fx.includes('schutzgeist')) {
+    const n = stufe(u, 'schutzgeist');
+    for (const q of lebend(b.seiten[s])) q.buff.push({ schutz: n, bis: b.zug + 1 });
+    emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'schutzgeist' });
+    log(b, `Schutzgeist: eigene Karten +${n} Elementarschutz für zwei Züge.`);
+  }
 }
 
 function freiBeschwoeren(b, s, filter, grund) {
@@ -308,15 +356,27 @@ export function zugBeginn(b) {
       u.elZug = u.el;
       if (b.zug >= u.aktivAb && !u.aktiviert) aktiviere(b, u);
       if (aktiv(b, u, 'elementwandel')) { u.el = mod(u.el + 2); u.elZug = u.el; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'elementwandel' }); }
-      if (aktiv(b, u, 'regeneration') && u.schaden > 0) { u.schaden = Math.max(0, u.schaden - 1); emit(b, { t: 'heilung', seite: s, uid: u.uid, wert: 1 }); }
-      if (aktiv(b, u, 'wachstum') && staerke(u.a) < 2 * u.basis) { const k = ATTR_WACHSTUM[Math.floor(b.rng.next() * ATTR_WACHSTUM.length)]; u.a[k]++; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'wachstum', attr: k }); }
+      if (aktiv(b, u, 'regeneration') && u.schaden > 0) { const h = Math.min(3, u.schaden); u.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: u.uid, wert: h }); }
+      if (aktiv(b, u, 'wachstum')) for (let n = 0; n < 2 && staerke(u.a) < 3 * u.basis; n++) { const k = ATTR_WACHSTUM[Math.floor(b.rng.next() * ATTR_WACHSTUM.length)]; u.a[k]++; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'wachstum', attr: k }); }
       if (aktiv(b, u, 'aufruester')) { const z = lebend(seite).find((q) => q.uid === u.aufruesterZiel); if (!z) waehleAufruestZiel(b, u); }
     }
   }
   for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) {
     if (aktiv(b, u, 'zauberbann')) {
-      const ziel = lebend(gegner(b, s)).filter((q) => q.fx.length && q.gebanntZug !== b.zug).sort((x, y) => y.preis - x.preis)[0];
-      if (ziel) { ziel.gebanntZug = b.zug; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'zauberbann', ziel: ziel.uid }); log(b, `Zauberbann hebt die Effekte von ${ziel.name} auf.`); }
+      const ziele = lebend(gegner(b, s)).filter((q) => q.fx.length && q.gebanntZug !== b.zug).sort((x, y) => y.preis - x.preis).slice(0, 2);
+      for (const ziel of ziele) { ziel.gebanntZug = b.zug; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'zauberbann', ziel: ziel.uid }); log(b, `Zauberbann hebt die Effekte von ${ziel.name} auf.`); }
+    }
+  }
+  // Gift (Giftstachel): Schaden zu Zugbeginn
+  for (const s of [0, 1]) for (const u of lebend(b.seiten[s])) {
+    const g = u.gift.filter((x) => x.bis >= b.zug);
+    u.gift = g;
+    const n = g.reduce((x, y) => x + y.n, 0);
+    if (n > 0) {
+      u.schaden += n;
+      emit(b, { t: 'blitz', seite: 1 - s, uid: u.uid, key: 'giftstachel', ziel: u.uid, wert: n, hpNach: restLeben(b, u) });
+      log(b, `${u.name} leidet unter Gift: ${n} Schaden.`);
+      if (restLeben(b, u) <= 0) { stirb(b, u, null); pruefeAusgeloescht(b, s, 'Gift'); }
     }
   }
   for (const s of [0, 1]) {
@@ -337,7 +397,7 @@ function waehleAufruestZiel(b, u) {
 function aktiviere(b, u) {
   u.aktiviert = true;
   const s = u.seite, seite = b.seiten[s];
-  if (u.fx.includes('herzstueck')) { seite.maxLeben++; seite.leben++; u.herzAktiv = true; emit(b, { t: 'leben', seite: s, delta: 1, leben: seite.leben, grund: 'Herzstück' }); log(b, `${seite.name}: Herzstück, maximale Leben +1.`); }
+  if (u.fx.includes('herzstueck')) { seite.maxLeben += 2; seite.leben += 2; u.herzAktiv = true; emit(b, { t: 'leben', seite: s, delta: 2, leben: seite.leben, grund: 'Herzstück' }); log(b, `${seite.name}: Herzstück, maximale Leben +2.`); }
   if (u.fx.includes('zweitesich')) {
     const pool = [];
     for (const q of lebend(seite)) if (q.uid !== u.uid) for (const k of q.fx) if (k !== 'zweitesich' && !EFFEKT_BLITZ.has(k)) pool.push(k);
@@ -345,18 +405,18 @@ function aktiviere(b, u) {
   }
   if (u.fx.includes('aufschub')) {
     const z = lebend(gegner(b, s)).filter((q) => q.fx.length).sort((x, y) => y.preis - x.preis)[0];
-    if (z) { z.aktivAb = Math.max(z.aktivAb, b.zug) + 1; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'aufschub', ziel: z.uid }); }
+    if (z) { z.aktivAb = Math.max(z.aktivAb, b.zug) + 2; emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'aufschub', ziel: z.uid }); }
   }
   if (u.fx.includes('aufruester')) waehleAufruestZiel(b, u);
   if (u.fx.includes('opferaltar')) {
     const andere = lebend(seite).filter((q) => q.uid !== u.uid).sort((x, y) => restLeben(b, x) - restLeben(b, y));
-    const ziel = seite.hand.some((q) => staerke(q.a) <= 5);
+    const ziel = seite.hand.some((q) => staerke(q.a) <= 10);
     if (andere.length && ziel) {
       const opfer = andere[0];
       emit(b, { t: 'effekt', seite: s, uid: u.uid, key: 'opferaltar', ziel: opfer.uid });
       opfer.atemGenutzt = true;
       stirb(b, opfer, null);
-      freiBeschwoeren(b, s, (q) => staerke(q.a) <= 5, 'Opferaltar');
+      freiBeschwoeren(b, s, (q) => staerke(q.a) <= 10, 'Opferaltar');
     }
   }
 }
@@ -401,7 +461,7 @@ function geplantesZiel(b, u, D, spalte, w, bereits, geplant) {
   let frei = [];
   if (w.wild >= 1 || zielsuche) {
     // [FEST] Größe n nur frei wählbar mit Wildheit ≥ n; [ANNAHME] freie Wahl braucht Wildheit ≥ 1
-    frei = lebende.filter((t) => (zielsuche || t.a.groesse <= w.wild) && !(aktiv(b, t, 'tarnung') && lebende.length > 1));
+    frei = lebende.filter((t) => (zielsuche || t.a.groesse <= w.wild) && (zielsuche || !(aktiv(b, t, 'tarnung') && lebende.length > 1)));
   }
   const kand = [];
   if (gegenueber && !bereits.has(gegenueber.uid)) kand.push(gegenueber);
@@ -494,8 +554,16 @@ function treffe(b, u, z, punkte, wahllos, w, typ) {
   const s = u.seite;
   u.enthuellt = true;
   const { schaden, f, art } = schadenFuer(b, u, z, punkte, wahllos, w);
-  if (aktiv(b, z, 'spiegel') && z.spiegelZug !== b.zug && schaden > 0) {
-    z.spiegelZug = b.zug;
+  u.ersterAngriff = false;
+  // Flink: Ausweichen (bei kleinen Karten doppelte Chance)
+  if (aktiv(b, z, 'flink') && schaden > 0 && b.rng.next() < Math.min(0.9, 0.12 * stufe(z, 'flink') * (klein(z) ? 2 : 1))) {
+    emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden: 0, f, art, punkte, typ, hpNach: restLeben(b, z), ausgewichen: true });
+    log(b, `${z.name} weicht flink aus.`);
+    return;
+  }
+  if (z.spiegelZug !== b.zug) { z.spiegelZug = b.zug; z.spiegelTreffer = 0; }
+  if (aktiv(b, z, 'spiegel') && z.spiegelTreffer < 2 && schaden > 0) {
+    z.spiegelTreffer++;
     u.schaden += schaden;
     emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, gespiegelt: true, hpNach: restLeben(b, z), hpAngreifer: restLeben(b, u) });
     pruefeTod(b, u, z);
@@ -503,10 +571,12 @@ function treffe(b, u, z, punkte, wahllos, w, typ) {
   }
   z.schaden += schaden;
   emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, hpNach: restLeben(b, z) });
-  if (aktiv(b, z, 'dornen')) { u.schaden += 1; emit(b, { t: 'dornen', seite: 1 - s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }
+  if (aktiv(b, u, 'lebensraub') && u.schaden > 0) { const h = Math.min(u.schaden, stufe(u, 'lebensraub')); u.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: u.uid, wert: h }); }
+  if (aktiv(b, u, 'giftstachel') && !z.tot) z.gift.push({ n: stufe(u, 'giftstachel'), bis: b.zug + 2 });
+  if (aktiv(b, z, 'dornen')) { u.schaden += 3; emit(b, { t: 'dornen', seite: 1 - s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }
   if (aktiv(b, u, 'flaechenwirbel')) {
     const D = gegner(b, s), sp = D.feld.indexOf(z);
-    for (const n of [D.feld[sp - 1], D.feld[sp + 1]]) if (n && !n.tot) { n.schaden += schaden / 2; emit(b, { t: 'flaeche', seite: s, von: u.uid, ziel: n.uid, schaden: schaden / 2, hpNach: restLeben(b, n) }); pruefeTod(b, n, u); }
+    for (const n of [D.feld[sp - 1], D.feld[sp + 1]]) if (n && !n.tot) { n.schaden += schaden * 0.75; emit(b, { t: 'flaeche', seite: s, von: u.uid, ziel: n.uid, schaden: schaden * 0.75, hpNach: restLeben(b, n) }); pruefeTod(b, n, u); }
   }
   pruefeTod(b, z, u);
   pruefeTod(b, u, z);
@@ -539,6 +609,7 @@ export function kampf(b) {
   for (let sp = 0; sp < breite; sp++) for (const s of [erste, 1 - erste]) { const u = b.seiten[s].feld[sp]; if (u && !u.tot) reihenfolge.push(u); }
   for (const u of reihenfolge) {
     if (u.tot || b.ende) continue;
+    if (u.bannBis >= b.zug) { log(b, `${u.name} ist gebannt und greift nicht an.`); emit(b, { t: 'angriff', seite: u.seite, von: u.uid, kein: true, grund: 'gebannt' }); continue; }
     const s = u.seite, D = gegner(b, s);
     const w = werte(b, u);
     const bereits = new Set();

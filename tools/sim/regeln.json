@@ -1,0 +1,48 @@
+{
+  "_hinweis": "Spielregeln für die agnostische Kampfsimulation (cardle_sim.py). Werte aus js/config.js, Stand 2026.11.24l. Ändern, um Regeln zu testen, ohne das Spiel anzufassen.",
+  "rad": {
+    "anzahl": 32,
+    "gegenpolAbstand": 16,
+    "gegenpolFaktor": 2.5,
+    "primFaktoren": { "2": 1.1, "3": 1.2, "5": 1.4, "7": 1.6, "11": 1.8, "13": 2.0 },
+    "richtung": 1
+  },
+  "klassen": [
+    { "name": "Bronze", "min": 1, "max": 7, "chance": 0.5999 },
+    { "name": "Silber", "min": 7, "max": 15, "chance": 0.22 },
+    { "name": "Gold", "min": 13, "max": 25, "chance": 0.10 },
+    { "name": "Platin", "min": 23, "max": 35, "chance": 0.05 },
+    { "name": "Emerald", "min": 30, "max": 45, "chance": 0.02 },
+    { "name": "Ruby", "min": 40, "max": 60, "chance": 0.006 },
+    { "name": "Saphire", "min": 50, "max": 80, "chance": 0.003 },
+    { "name": "Diamond", "min": 70, "max": 100, "chance": 0.001 },
+    { "name": "Brilliant", "min": 100, "max": null, "chance": 0.0001, "mittelUeber": 20 }
+  ],
+  "obergrenzen": { "kraft": 30, "schutz": 15, "groesse": 5, "wildheit": 5, "seltsamkeit": 8, "schlagzahl": 5, "teamplatz": 10, "heilung": 10, "kapazitaet": 10 },
+  "rollen": {
+    "angreifer":  { "schlagMax": 2, "g": { "kraft": 6, "schutz": 2, "groesse": 1, "wildheit": 1.5, "seltsamkeit": 1, "schlagzahl": 2, "teamplatz": 1 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "tank":       { "schlagMax": 1, "g": { "kraft": 2, "schutz": 6, "groesse": 3, "wildheit": 0.5, "seltsamkeit": 0.5, "schlagzahl": 1, "teamplatz": 0.5 }, "min": { "schutz": 1, "schlagzahl": 1 } },
+    "wildling":   { "schlagMax": 2, "g": { "kraft": 4, "schutz": 1, "groesse": 0.5, "wildheit": 4, "seltsamkeit": 1, "schlagzahl": 2, "teamplatz": 0.5 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "riese":      { "schlagMax": 1, "g": { "kraft": 4, "schutz": 3, "groesse": 4, "wildheit": 1, "seltsamkeit": 0.3, "schlagzahl": 1, "teamplatz": 2 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "sonderling": { "schlagMax": 2, "g": { "kraft": 3, "schutz": 2, "groesse": 1, "wildheit": 1, "seltsamkeit": 5, "schlagzahl": 1, "teamplatz": 0.5 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "wirbler":    { "schlagMax": 4, "g": { "kraft": 4, "schutz": 1, "groesse": 0.5, "wildheit": 2, "seltsamkeit": 1, "schlagzahl": 4, "teamplatz": 0.5 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "koloss":     { "schlagMax": 1, "g": { "kraft": 5, "schutz": 2, "groesse": 2, "wildheit": 1, "seltsamkeit": 0.5, "schlagzahl": 1, "teamplatz": 4 }, "min": { "kraft": 1, "schlagzahl": 1 } },
+    "heiler":     { "schlagMax": 1, "g": { "kraft": 2, "schutz": 2, "groesse": 1, "wildheit": 1, "seltsamkeit": 1, "schlagzahl": 1, "teamplatz": 0.5, "heilung": 5 }, "min": { "heilung": 1 } },
+    "kommandant": { "schlagMax": 1, "g": { "kraft": 2, "schutz": 2, "groesse": 1, "wildheit": 1, "seltsamkeit": 1, "schlagzahl": 1, "teamplatz": 0.5, "kapazitaet": 5 }, "min": { "kapazitaet": 1 } }
+  },
+  "kampf": {
+    "beschwoerungProZug": 10,
+    "spielerLeben": 5,
+    "teamGrundplaetze": 10,
+    "teamplatzMultProPunkt": 0.2,
+    "teamplatzMinPlaetze": 1,
+    "rundenLimit": 80
+  },
+  "ki": {
+    "_hinweis": "Parameter der Spiel-KI (kiBeschwoeren in js/battle.js)",
+    "ueberlebensSchwelle": 0.95,
+    "sparenWennTeuersteUnter": 0.5,
+    "sparenZuegeVoraus": 2,
+    "maxBeschwoerungenJeZug": 40
+  }
+}

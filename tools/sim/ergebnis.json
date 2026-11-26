@@ -1,0 +1,508 @@
+{
+ "parameter": {
+  "regeln": "C:\\Users\\Firemozzi\\Documents\\GitHub\\Cardle\\tools\\sim\\regeln.json",
+  "spiele": 2000,
+  "verhaeltnisse": "0.5,0.6,0.7,0.8,0.9,1,1.1,1.25,1.5,1.75,2,2.5,3,4",
+  "strategien": "auto,taktisch,zufall",
+  "gegnerstaerke": 120,
+  "anzahl": 8,
+  "tiefe": 2,
+  "kandidaten": 36,
+  "prozesse": 30,
+  "seed": 1,
+  "ausgabe": "C:\\Users\\Firemozzi\\Documents\\GitHub\\Cardle\\tools\\sim\\ergebnis.json"
+ },
+ "zeilen": [
+  {
+   "verhaeltnis": 0.5,
+   "tatsaechlich": 0.5,
+   "auto": {
+    "gewinnrate": 0.002,
+    "ci95": [
+     0.0008,
+     0.0051
+    ],
+    "remis": 0,
+    "zuegeMittel": 9.3,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.014,
+    "ci95": [
+     0.0097,
+     0.0202
+    ],
+    "remis": 0,
+    "zuegeMittel": 12.1,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.0005,
+    "ci95": [
+     0.0001,
+     0.0028
+    ],
+    "remis": 0,
+    "zuegeMittel": 9.1,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 0.6,
+   "tatsaechlich": 0.6,
+   "auto": {
+    "gewinnrate": 0.014,
+    "ci95": [
+     0.0097,
+     0.0202
+    ],
+    "remis": 0,
+    "zuegeMittel": 11.4,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.0705,
+    "ci95": [
+     0.0601,
+     0.0826
+    ],
+    "remis": 0,
+    "zuegeMittel": 15.2,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.0075,
+    "ci95": [
+     0.0046,
+     0.0123
+    ],
+    "remis": 0,
+    "zuegeMittel": 11.0,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 0.7,
+   "tatsaechlich": 0.7,
+   "auto": {
+    "gewinnrate": 0.0425,
+    "ci95": [
+     0.0345,
+     0.0523
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.6,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.2265,
+    "ci95": [
+     0.2087,
+     0.2454
+    ],
+    "remis": 0,
+    "zuegeMittel": 19.1,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.027,
+    "ci95": [
+     0.0208,
+     0.0351
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.2,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 0.8,
+   "tatsaechlich": 0.8,
+   "auto": {
+    "gewinnrate": 0.144,
+    "ci95": [
+     0.1293,
+     0.1601
+    ],
+    "remis": 0,
+    "zuegeMittel": 17.9,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.4495,
+    "ci95": [
+     0.4278,
+     0.4714
+    ],
+    "remis": 0,
+    "zuegeMittel": 21.6,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.092,
+    "ci95": [
+     0.0801,
+     0.1055
+    ],
+    "remis": 0,
+    "zuegeMittel": 17.2,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 0.9,
+   "tatsaechlich": 0.9,
+   "auto": {
+    "gewinnrate": 0.301,
+    "ci95": [
+     0.2813,
+     0.3215
+    ],
+    "remis": 0,
+    "zuegeMittel": 20.5,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.657,
+    "ci95": [
+     0.6359,
+     0.6775
+    ],
+    "remis": 0,
+    "zuegeMittel": 21.6,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.217,
+    "ci95": [
+     0.1995,
+     0.2356
+    ],
+    "remis": 0,
+    "zuegeMittel": 19.8,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 1.0,
+   "tatsaechlich": 1.0,
+   "auto": {
+    "gewinnrate": 0.508,
+    "ci95": [
+     0.4861,
+     0.5299
+    ],
+    "remis": 0,
+    "zuegeMittel": 22.3,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.833,
+    "ci95": [
+     0.816,
+     0.8487
+    ],
+    "remis": 0,
+    "zuegeMittel": 19.8,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.3775,
+    "ci95": [
+     0.3565,
+     0.399
+    ],
+    "remis": 0,
+    "zuegeMittel": 21.8,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 1.1,
+   "tatsaechlich": 1.1,
+   "auto": {
+    "gewinnrate": 0.6815,
+    "ci95": [
+     0.6607,
+     0.7016
+    ],
+    "remis": 0,
+    "zuegeMittel": 22.1,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.915,
+    "ci95": [
+     0.902,
+     0.9264
+    ],
+    "remis": 0,
+    "zuegeMittel": 17.4,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.5585,
+    "ci95": [
+     0.5366,
+     0.5801
+    ],
+    "remis": 0,
+    "zuegeMittel": 22.1,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 1.25,
+   "tatsaechlich": 1.25,
+   "auto": {
+    "gewinnrate": 0.8395,
+    "ci95": [
+     0.8228,
+     0.8549
+    ],
+    "remis": 0,
+    "zuegeMittel": 21.0,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.974,
+    "ci95": [
+     0.9661,
+     0.9801
+    ],
+    "remis": 0,
+    "zuegeMittel": 15.6,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.7525,
+    "ci95": [
+     0.7331,
+     0.7709
+    ],
+    "remis": 0,
+    "zuegeMittel": 21.7,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 1.5,
+   "tatsaechlich": 1.5,
+   "auto": {
+    "gewinnrate": 0.9575,
+    "ci95": [
+     0.9477,
+     0.9655
+    ],
+    "remis": 0,
+    "zuegeMittel": 17.6,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.9965,
+    "ci95": [
+     0.9928,
+     0.9983
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.2,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.8995,
+    "ci95": [
+     0.8855,
+     0.9119
+    ],
+    "remis": 0,
+    "zuegeMittel": 18.0,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 1.75,
+   "tatsaechlich": 1.75,
+   "auto": {
+    "gewinnrate": 0.98,
+    "ci95": [
+     0.9729,
+     0.9853
+    ],
+    "remis": 0,
+    "zuegeMittel": 16.3,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.9995,
+    "ci95": [
+     0.9972,
+     0.9999
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.2,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.951,
+    "ci95": [
+     0.9406,
+     0.9596
+    ],
+    "remis": 0,
+    "zuegeMittel": 16.4,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 2.0,
+   "tatsaechlich": 2.0,
+   "auto": {
+    "gewinnrate": 0.9895,
+    "ci95": [
+     0.984,
+     0.9931
+    ],
+    "remis": 0,
+    "zuegeMittel": 15.5,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.9995,
+    "ci95": [
+     0.9972,
+     0.9999
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.2,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.9645,
+    "ci95": [
+     0.9555,
+     0.9718
+    ],
+    "remis": 0,
+    "zuegeMittel": 15.6,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 2.5,
+   "tatsaechlich": 2.5,
+   "auto": {
+    "gewinnrate": 0.9945,
+    "ci95": [
+     0.9902,
+     0.9969
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.7,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 1.0,
+    "ci95": [
+     0.9981,
+     1
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.1,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.957,
+    "ci95": [
+     0.9472,
+     0.965
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.6,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 3.0,
+   "tatsaechlich": 2.999,
+   "auto": {
+    "gewinnrate": 0.9945,
+    "ci95": [
+     0.9902,
+     0.9969
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.2,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 1.0,
+    "ci95": [
+     0.9981,
+     1
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.2,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.9555,
+    "ci95": [
+     0.9456,
+     0.9637
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.2,
+    "n": 2000
+   }
+  },
+  {
+   "verhaeltnis": 4.0,
+   "tatsaechlich": 3.983,
+   "auto": {
+    "gewinnrate": 0.9895,
+    "ci95": [
+     0.984,
+     0.9931
+    ],
+    "remis": 0,
+    "zuegeMittel": 14.1,
+    "n": 2000
+   },
+   "taktisch": {
+    "gewinnrate": 0.994,
+    "ci95": [
+     0.9895,
+     0.9966
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.9,
+    "n": 2000
+   },
+   "zufall": {
+    "gewinnrate": 0.868,
+    "ci95": [
+     0.8525,
+     0.8821
+    ],
+    "remis": 0,
+    "zuegeMittel": 13.2,
+    "n": 2000
+   }
+  }
+ ],
+ "schwellen": {
+  "auto": {
+   "0.5": 1.0,
+   "0.8": 1.25
+  },
+  "taktisch": {
+   "0.5": 0.9,
+   "0.8": 1.0
+  },
+  "zufall": {
+   "0.5": 1.1,
+   "0.8": 1.5
+  }
+ },
+ "sekunden": 97.4
+}

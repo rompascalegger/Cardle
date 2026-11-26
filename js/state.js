@@ -6,6 +6,7 @@ import { ARTEN } from './species.js';
 import { kodiere, dekodiere, ausfuehrungsKey, kartenSeltenheit, staubBeimAbtragen, hatLook, plaetzeBelegt, plaetzeBringt, staerke, verkaufswert, kosten, kampfWert, klasseFuerWurf } from './rules.js';
 import { oeffnePack, verteilePunkte, staerkeWurf, brillantEffekt, wuerfleEffektStufen } from './generator.js';
 import { PACK_EFFEKTE } from './effects.js';
+import { goldeneStunde } from './extras.js';
 
 const params = new URLSearchParams(globalThis.location ? location.search : '');
 export const URL_SEED = params.get('seed');
@@ -292,7 +293,8 @@ export function packOeffnen({ quelle = 'vorrat', sonderIndex = null } = {}) {
   }
   const G = CONFIG.gluecksPack, E = CONFIG.elementPack, EP = CONFIG.erfolgsPack;
   const ST = CONFIG.sonderPackTypen[sonder?.typ];
-  const optionen = !sonder ? {} : ST ? { mult: ST.faktor, groesse: ST.karten } : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : sonder.typ === 'erfolg' ? { mult: EP.faktor, groesse: EP.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
+  // Goldene Stunde [Nutzer, 26.11.2026]: normale Packs mit erhöhten Chancen
+  const optionen = !sonder ? { mult: goldeneStunde().mult } : ST ? { mult: ST.faktor, groesse: ST.karten } : sonder.typ === 'gluecks' ? { mult: G.faktor, groesse: G.karten } : sonder.typ === 'erfolg' ? { mult: EP.faktor, groesse: EP.karten } : { mult: E.faktor, groesse: E.karten, element: sonder.el };
   const pack = oeffnePack(S.rng, S.d.pity, optionen);
   pack.sonder = sonder;
   pack.gluecks = sonder?.typ === 'gluecks';
@@ -416,6 +418,7 @@ export function verstaerken(i, attr) {
   if ((S.d.kampfstaub || 0) < preis) return null;
   S.d.kampfstaub -= preis;
   c.a[attr] = (c.a[attr] || 0) + 1;
+  S.d.stat.verstaerkt = (S.d.stat.verstaerkt || 0) + 1;
   S.karten[i] = kodiere(c);
   baueIndex(); aenderung('sammlung'); speichernBald(300);
   return { preis, wert: c.a[attr] };
@@ -428,6 +431,7 @@ export function neuWuerfeln(i) {
   const preis = CONFIG.gluecksstaub.rerollKosten(c.kl);
   if ((S.d.gluecksstaub || 0) < preis) return null;
   S.d.gluecksstaub -= preis;
+  S.d.stat.gewuerfelt = (S.d.stat.gewuerfelt || 0) + 1;
   const r = S.rng, art = ARTEN[c.art];
   const vorher = { kl: c.kl, staerke: staerke(c.a), fx: c.fx.length };
   let kl = c.kl;

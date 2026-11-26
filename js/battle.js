@@ -31,7 +31,7 @@ function neueSeite(id, name, karten, leben, rng, einkommen = CONFIG.kampf.beschw
   return { id, name, leben, maxLeben: leben, bank: startBank, basisEinkommen: einkommen, hand: karten.map((c) => neueEinheit(c, id, rng)), feld: [], friedhof: [], lebenZug: -1, ankerGenutzt: false, angriffe: 0 };
 }
 
-export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false, gegnerEinkommen, gegnerStartBank = 0, gegnerFaktor = 1 }) {
+export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.kampf.spielerLeben, gegnerLeben = CONFIG.kampf.spielerLeben, rng, spielerName = 'Du', gegnerName = 'Gegner', autoSpieler = false, gegnerEinkommen, gegnerStartBank = 0, gegnerFaktor = 1, setBoni = [] }) {
   const b = {
     zug: 0, rng, autoSpieler,
     seiten: [neueSeite(0, spielerName, spielerKarten, spielerLeben, rng), neueSeite(1, gegnerName, gegnerKarten, gegnerLeben, rng, gegnerEinkommen, gegnerStartBank)],
@@ -39,6 +39,8 @@ export function neuerKampf({ spielerKarten, gegnerKarten, spielerLeben = CONFIG.
   };
   // Stärkebuff (Ewiger Turm): Elementarkraft und Lebenspunkte der Gegnerkarten × Faktor
   b.seiten[1].staerkeFaktor = gegnerFaktor;
+  // Element-Sets [Nutzer, 26.11.2026]: eigene Karten dieser Elemente +Elementarkraft
+  b.seiten[0].setBoni = new Set(setBoni);
   return b;
 }
 
@@ -75,6 +77,7 @@ export function werte(b, u) {
   const s = u.seite;
   const eigene = lebend(b.seiten[s]);
   let kraft = u.a.kraft;
+  if (b.seiten[s].setBoni?.has(u.el)) kraft += CONFIG.elementSet.bonusKraft;
   kraft += 2 * zaehle(b, s, 'elementverstaerker', (q) => q.el === u.el);
   kraft += 2 * zaehle(b, s, 'nachbarschaft', (q) => q.uid !== u.uid && (mod(q.el - u.el) === 1 || mod(u.el - q.el) === 1));
   kraft += 3 * quellen(b, s).filter((q) => aktiv(b, q, 'aufruester') && q.aufruesterZiel === u.uid).length;
@@ -567,7 +570,11 @@ function pruefeTod(b, einheit, killer) {
 function treffe(b, u, z, punkte, wahllos, w, typ) {
   const s = u.seite;
   u.enthuellt = true;
-  const { schaden, f, art } = schadenFuer(b, u, z, punkte, wahllos, w);
+  const roh = schadenFuer(b, u, z, punkte, wahllos, w);
+  // Kritischer Treffer [Nutzer, 26.11.2026]
+  const krit = roh.schaden > 0 && b.rng.next() < CONFIG.krit.chance;
+  const schaden = roh.schaden * (krit ? CONFIG.krit.faktor : 1), f = roh.f, art = roh.art;
+  const restVorher = restLeben(b, z);
   u.ersterAngriff = false;
   // Flink: Ausweichen (bei kleinen Karten doppelte Chance)
   if (aktiv(b, z, 'flink') && schaden > 0 && b.rng.next() < Math.min(0.9, 0.12 * stufe(z, 'flink') * (klein(z) ? 2 : 1))) {
@@ -584,8 +591,8 @@ function treffe(b, u, z, punkte, wahllos, w, typ) {
     return;
   }
   z.schaden += schaden;
-  emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, hpNach: restLeben(b, z) });
-  log(b, `${u.name} trifft ${z.name} für ${Math.round(schaden * 10) / 10}${f !== 1 ? ` (×${Math.round(f * 100) / 100})` : ''}, noch ${Math.max(0, Math.round(restLeben(b, z) * 10) / 10)}.`, s);
+  emit(b, { t: 'angriff', seite: s, von: u.uid, ziel: z.uid, schaden, f, art, punkte, typ, hpNach: restLeben(b, z), krit, overkill: Math.max(0, schaden - restVorher) });
+  log(b, `${u.name} trifft ${z.name} für ${Math.round(schaden * 10) / 10}${krit ? ' (KRITISCH!)' : ''}${f !== 1 ? ` (×${Math.round(f * 100) / 100})` : ''}, noch ${Math.max(0, Math.round(restLeben(b, z) * 10) / 10)}.`, s);
   if (aktiv(b, u, 'lebensraub') && u.schaden > 0) { const h = Math.min(u.schaden, stufe(u, 'lebensraub')); u.schaden -= h; emit(b, { t: 'heilung', seite: s, uid: u.uid, wert: h }); }
   if (aktiv(b, u, 'giftstachel') && !z.tot) z.gift.push({ n: stufe(u, 'giftstachel'), bis: b.zug + 2 });
   if (aktiv(b, z, 'dornen')) { u.schaden += 3; emit(b, { t: 'dornen', seite: 1 - s, uid: z.uid, ziel: u.uid, hpNach: restLeben(b, u) }); }

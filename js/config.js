@@ -9,7 +9,7 @@
 // Alles, was Balancing ist, steht hier. Der übrige Code liest nur diese Werte.
 
 // Versionskennung, oben in der Hilfe angezeigt. Bei jedem Release hochzählen (Datum + Buchstabe für mehrere am Tag).
-export const VERSION = { kennung: '2026.11.24l', stand: '24.11.2026', notiz: 'Looks im Verbessern-Menü auftragen und abtragen' };
+export const VERSION = { kennung: '2026.11.26a', stand: '26.11.2026', notiz: 'Glücksrad, Login-Truhe, Quests, Goldene Stunde, Element-Sets, kritische Treffer und Kombos' };
 
 export const CONFIG = {
   spielname: 'Cardle', // [OFFEN] Platzhalter, Arbeitsname (Manifest 1.2)
@@ -239,6 +239,56 @@ export const CONFIG = {
     leben: (n) => 10 + Math.floor(n / 25),
     kampfstaub: (n) => 50 + 5 * n,
   },
+  // ---------- Mehr Dopamin [Nutzer, 26.11.2026] ----------
+  // Kritische Treffer: Chance je Treffer und Faktor (beide Seiten gleich, ändert die Balance kaum)
+  krit: { chance: 0.1, faktor: 1.5 },
+  // Glücksrad nach jedem Sieg. gewicht = relative Chance. Werte wachsen mit dem Kampfrang (rang 1 = Welt 1).
+  gluecksrad: {
+    felder: [
+      { typ: 'muenzen', basis: 400, gewicht: 22, farbe: '#ffd447' },
+      { typ: 'packs', basis: 1, gewicht: 18, farbe: '#5ffff0' },
+      { typ: 'kampfstaub', basis: 25, gewicht: 15, farbe: '#ff9a3d' },
+      { typ: 'muenzen', basis: 1500, gewicht: 12, farbe: '#ffe9a8' },
+      { typ: 'gluecksstaub', basis: 25, gewicht: 13, farbe: '#9af7ff' },
+      { typ: 'packs', basis: 3, gewicht: 9, farbe: '#3d9bff' },
+      { typ: 'gluecks', basis: 1, gewicht: 4, farbe: '#ff5fd2' },
+      { typ: 'jackpot', basis: 1, gewicht: 1, farbe: '#ffffff' },
+    ],
+    // Jackpot: 10 Packs, 1 Kernpack, viele Münzen
+    jackpot: { packs: 10, kern: 1, muenzen: 25000 },
+  },
+  // Tägliche Login-Truhe: Belohnung nach Tag der Serie (Tag 8 = wieder Tag 1, aber Serie läuft weiter), jeder 30. Tag extra
+  login: {
+    tage: [
+      { muenzen: 1000 }, { packs: 2 }, { kampfstaub: 50 }, { packs: 3, muenzen: 1500 },
+      { gluecksstaub: 80 }, { packs: 5 }, { gluecks: 1, packs: 5, muenzen: 5000 },
+    ],
+    alle30: { kern: 1, gluecks: 2 },
+  },
+  // Quests: 3 täglich, 3 wöchentlich, zufällig aus diesen Vorlagen (Seed = Datum/Woche)
+  quests: {
+    tag: [
+      { id: 'packs', text: 'Öffne {n} Packs', stat: 'packs', ziele: [10, 20, 40], lohn: { muenzen: 1500, kampfstaub: 20 } },
+      { id: 'siege', text: 'Gewinne {n} Kämpfe', stat: 'siege', ziele: [3, 5, 8], lohn: { packs: 3 } },
+      { id: 'holo', text: 'Ziehe {n} Holo-Karte', stat: 'holoKarten', ziele: [1], lohn: { gluecksstaub: 40 } },
+      { id: 'verstaerken', text: 'Verstärke {n} Karten', stat: 'verstaerkt', ziele: [2, 4], lohn: { kampfstaub: 40 } },
+      { id: 'ernten', text: 'Ernte {n} Karten', stat: 'geerntet', ziele: [5, 10], lohn: { packs: 2, gluecksstaub: 20 } },
+      { id: 'wuerfeln', text: 'Würfle {n} Karten neu', stat: 'gewuerfelt', ziele: [2, 3], lohn: { gluecksstaub: 50 } },
+      { id: 'rad', text: 'Drehe {n}× das Glücksrad', stat: 'radDrehungen', ziele: [2, 4], lohn: { muenzen: 2500 } },
+    ],
+    woche: [
+      { id: 'w-packs', text: 'Öffne {n} Packs', stat: 'packs', ziele: [100, 200], lohn: { gluecks: 1, packs: 10 } },
+      { id: 'w-siege', text: 'Gewinne {n} Kämpfe', stat: 'siege', ziele: [20, 35], lohn: { gluecks: 1, kampfstaub: 200 } },
+      { id: 'w-effekt', text: 'Ziehe {n} Effektkarte', stat: 'effektKarten', ziele: [1], lohn: { gluecks: 2 } },
+      { id: 'w-verstaerken', text: 'Verstärke {n} Karten', stat: 'verstaerkt', ziele: [15, 25], lohn: { kampfstaub: 300, gluecksstaub: 150 } },
+      { id: 'w-daily', text: 'Schaffe {n} Daily Challenges', stat: 'dailySiege', ziele: [5, 10], lohn: { kern: 1 } },
+    ],
+  },
+  // Goldene Stunde: zufällige Stunden mit erhöhten Chancen (Seed = Datum + Stunde, für alle gleich)
+  goldeneStunde: { chance: 0.15, mult: 2 },
+  // Element-Sets: alle Monster eines Elements gefunden → Belohnung und dauerhaft +1 Elementarkraft für dieses Element
+  elementSet: { bonusKraft: 1, lohn: { element: 3, gluecks: 1, muenzen: 10000 } },
+
   // Staub zum Verbessern [Nutzer, 24.11.2026]
   kampfstaub: {
     proSieg: (w, l, boss) => Math.round((3 + 2 * w + l) * boss), // erster Sieg; Wiederholung: Anteil wie Packs

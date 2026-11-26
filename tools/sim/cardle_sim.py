@@ -531,6 +531,9 @@ class Kampf:
 
     def treffe(self, u, z, punkte, w):
         schaden, _ = self.schaden_fuer(u, z, punkte, w)
+        krit = self.R.d["kampf"].get("krit")
+        if krit and schaden > 0 and self.rng.random() < krit["chance"]:
+            schaden *= krit["faktor"]  # kritischer Treffer
         z.schaden += schaden
         self.pruefe_tod(z)
 

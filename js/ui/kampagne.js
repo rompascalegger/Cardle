@@ -16,6 +16,8 @@ import { ERFOLGE, pruefeErfolge, lohnText } from '../erfolge.js';
 import { karteVergroessern } from './lupe.js';
 import { ARTEN } from '../species.js';
 import { trivia } from '../trivia.js';
+import { setBoni, statPlus } from '../extras.js';
+import { gluecksradZeigen, questsPanel, setsPanel } from './extras.js';
 import { neuerKampf, zugBeginn, kampf, beschwoere, tausche, kiBeschwoeren, werte, restLeben, maxLeben, effektiveKosten, einkommen, angezeigtesEl, lebenVerborgen, findeEinheit, lebend, erreichbareElemente, aktiv, vorschauRunde, faktorKampf } from '../battle.js';
 import { h, modal, toast, warte, anim, ICON, fmt, fmt1, schuetteln, partikel, konfetti } from './dom.js';
 
@@ -243,6 +245,8 @@ export function erfolgeScreen(root, nav) {
   const kopf = h('div', { class: 'panel kp-kopf', html: `<div class="kp-titel"><h2>Erfolge</h2><span><b>${geschafft}</b> / ${ERFOLGE.length} freigeschaltet</span><span>Jeder Erfolg gibt ein Erfolgspack (Chancen ×${CONFIG.erfolgsPack.faktor}).</span></div>` });
   if (offen.length) kopf.append(h('div', { class: 'kp-knoepfe' }, h('button', { class: 'btn primaer', html: `🏆 Alle Erfolgspacks abholen (${offen.length})`, onclick: () => abholen(offen) }), h('button', { class: 'btn', text: 'Zu den Packs', onclick: () => nav && nav('packs') })));
   wrap.append(kopf);
+  // Quests und Element-Sets [Nutzer, 26.11.2026]
+  wrap.append(questsPanel(() => { wrap.replaceChildren(); erfolgeInhalt(); }), setsPanel());
   for (const g of gruppen) {
     const box = h('div', { class: 'panel erfolg-gruppe' }, h('h3', { text: g }));
     const liste = h('div', { class: 'erfolg-liste' });
@@ -323,12 +327,12 @@ export function kampfScreen(root, nav, { id, daily = null, turm = null }) {
   const b = neuerKampf({
     spielerKarten: eigenTeam.map((i) => Object.assign(karteMitName(i), { idx: i })), gegnerKarten: daily != null ? dailyGegner(k) : gegnerTeam(k, fortschritt), gegnerLeben: k.leben,
     rng: new Rng(`${S.d.seed}:${k.id}:${S.d.stat.packs}:${S.d.kampagne.siege + S.d.kampagne.niederlagen}`),
-    gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank, gegnerFaktor: k.turm ? kw.faktor : 1,
+    gegnerName: k.daily ? k.name : k.boss ? k.name : 'Gegner', gegnerEinkommen: kw.einkommen, gegnerStartBank: kw.startBank, gegnerFaktor: k.turm ? kw.faktor : 1, setBoni: setBoni(),
   });
   // Auto-Beschwören je Team gespeichert: gesperrte Karten und Knopf (Standard aus)
   const konf = kampfKonfig(daily);
   for (const u of b.seiten[0].hand) u.autoAus = konf.autoAus.includes(u.c.idx);
-  const v = { auswahlHand: null, auswahlFeld: null, phase: 'start', tempoI: S.d.einst.kampfTempo || 0, auto: false, laeuft: false, aus: false };
+  const v = { kombo: {}, auswahlHand: null, auswahlFeld: null, phase: 'start', tempoI: S.d.einst.kampfTempo || 0, auto: false, laeuft: false, aus: false };
   const wrap = h('section', { class: 'screen kampf' });
   wrap.innerHTML = `
 <div class="kf-seite gegner"><div class="kf-name"></div><div class="kf-leben"></div><div class="kf-bank"></div><div class="kf-staerke"></div><div class="kf-hand-zahl"></div></div>
@@ -684,6 +688,18 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
 
   // ---- Ereignisse abspielen ----
   const mitte = (el) => { const r = el.getBoundingClientRect(), o = flug.getBoundingClientRect(); return { x: r.left - o.left + r.width / 2, y: r.top - o.top + r.height / 2 }; };
+  // Kombo-Banner und kurzer Blitz [Nutzer, 26.11.2026]
+  const komboZeigen = (seite, n) => {
+    const b2 = h('div', { class: 'kombo-banner' + (seite ? ' feind' : ''), html: `${seite ? 'Gegner-' : ''}Kombo <b>×${n}</b>${n >= 4 ? ' · VERNICHTEND!' : n === 3 ? ' · GEWALTIG!' : ''}` });
+    wrap.append(b2);
+    if (seite === 0) { Sound.jackpot(Math.min(5, n)); if (n >= 3) konfetti(30 + n * 20); }
+    anim(b2, [{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1.15)', opacity: 1, offset: 0.25 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: 0.7 }, { transform: 'translate(-50%,-60%) scale(.95)', opacity: 0 }], { duration: D(1400), easing: 'ease-out' }).then(() => b2.remove());
+  };
+  const blitzKurz = (farbe) => {
+    const f = h('div', { class: 'krit-blitz', style: `--f:${farbe}` });
+    wrap.append(f);
+    anim(f, [{ opacity: 0.55 }, { opacity: 0 }], { duration: D(260), easing: 'ease-out' }).then(() => f.remove());
+  };
   const zahlFliegt = (el, text, art = '') => {
     if (!el) return;
     const p = mitte(el);
@@ -743,7 +759,10 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
             zahlFliegt(t0, `−${fmt1(e.schaden)}`, 'schaden');
             const a = findeEinheit(b, e.von); if (t0 && a) aktualisiereKachel(t0, a, e.hpAngreifer);
           } else {
-            zahlFliegt(tz, `−${fmt1(e.schaden)}${fText}`, 'schaden' + (e.art === 'gegenpol' ? ' erz' : ''));
+            // Kritischer Treffer und Overkill [Nutzer, 26.11.2026]
+            zahlFliegt(tz, `${e.krit ? '<b class="krit-wort">KRIT!</b> ' : ''}−${fmt1(e.schaden)}${fText}`, 'schaden' + (e.art === 'gegenpol' ? ' erz' : '') + (e.krit ? ' krit' : ''));
+            if (e.krit) { schuettle(tz); Sound.treffer(2.5); blitzKurz(e.seite === 0 ? '#ffd447' : '#ff4d5e'); }
+            if (e.overkill > 0.5) setTimeout(() => zahlFliegt(tz, `Overkill +${fmt1(e.overkill)}`, 'overkill'), D(220));
             const z = findeEinheit(b, e.ziel); if (tz && z) aktualisiereKachel(tz, z, e.hpNach);
           }
           await warte(D(140));
@@ -754,6 +773,8 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
         case 'tod': {
           const t = kachelVon(e.uid);
           Sound.tod();
+          // Kombo: mehrere Kills einer Seite in derselben Runde
+          if (e.seite != null) { const k = 1 - e.seite; v.kombo[k] = (v.kombo[k] || 0) + 1; if (v.kombo[k] >= 2) komboZeigen(k, v.kombo[k]); }
           if (t) {
             const r = t.getBoundingClientRect();
             partikel(r.left + r.width / 2, r.top + r.height / 2, { anzahl: 18, farben: [t.style.getPropertyValue('--el'), '#fff'], weite: 90, dauer: 700, groesse: 6 });
@@ -797,7 +818,7 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
   };
   const kampfRunde = async () => {
     if (v.phase !== 'spieler' || b.ende) return;
-    v.phase = 'kampf'; v.auswahlHand = null; v.auswahlFeld = null;
+    v.phase = 'kampf'; v.auswahlHand = null; v.auswahlFeld = null; v.kombo = {};
     zeichneSeiten(); zeichneHand(); markiere();
     kampf(b);
     await spiele(b.ev.splice(0));
@@ -825,6 +846,7 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     if (sieg) {
       S.d.kampagne.siege++;
       if (k.daily) {
+        statPlus('dailySiege');
         const erst = dailyGeschafft(k.kl);
         S.d.erfolgeDaily = S.d.erfolgeDaily || {}; S.d.erfolgeDaily[k.kl] = true;
         if (erst) {
@@ -874,6 +896,12 @@ ${fxZeilen ? `<div class="kfi-h">Effekte</div>${fxZeilen}` : ''}
     const geh = (ziel, params) => () => { gewaehlt = true; nav(ziel, params); };
     const naechster = sieg && !k.daily ? naechsterKampf(fort, k.dim) : null;
     const knoepfe = [{ text: 'Nochmal', aktion: geh('kampf', k.daily ? { daily: k.kl } : { id: k.id }) }];
+    // Glücksrad nach jedem Sieg [Nutzer, 26.11.2026]: einmal drehen, Rang nach Fortschritt
+    if (sieg) {
+      const rang = k.turm ? 10 + Math.floor(k.turm / 10) : k.daily ? 1 + k.kl : k.tief ? 8 + Math.ceil(k.welt / 2) : k.kern ? 6 + Math.ceil(k.welt / 4) : k.welt;
+      let gedreht = false;
+      knoepfe.unshift({ text: '🎡 Glücksrad drehen', klasse: 'gluecksrad-knopf', schliesst: false, aktion: (ev) => { if (gedreht) return false; gedreht = true; document.querySelector('.gluecksrad-knopf')?.setAttribute('disabled', ''); gluecksradZeigen(rang); return false; } });
+    }
     if (sieg) knoepfe.push({ text: 'Packs öffnen', aktion: geh('packs') });
     knoepfe.push({ text: k.daily ? 'Zu den Dailys' : 'Zur Karte', klasse: naechster ? '' : 'primaer', aktion: geh(zurueck) });
     if (naechster) knoepfe.push({ text: `Weiter: ${esc(weltName(naechster.dim, naechster.welt))} · ${esc(naechster.name)}`, klasse: 'primaer', aktion: () => { gewaehlt = true; vorschau(naechster, nav); } });

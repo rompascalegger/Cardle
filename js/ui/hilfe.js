@@ -10,6 +10,7 @@ import { faktorText } from '../elements.js';
 import { h, modal, fmt } from './dom.js';
 import { spielstandExport, spielstandPruefen, spielstandImport, speichern } from '../state.js';
 
+const lohnTextHilfe = (l) => Object.entries(l).map(([k, v]) => `${v} ${({ kern: 'Kernpack', gluecks: 'Glückspacks', packs: 'Packs', muenzen: 'Münzen' })[k] || k}`).join(' und ');
 const abschnitt = (titel, html, offen = false) => `<details class="hilfe-abschnitt"${offen ? ' open' : ''}><summary>${titel}</summary><div class="hilfe-text">${html}</div></details>`;
 
 export function hilfe() {
@@ -70,6 +71,12 @@ export function hilfe() {
 <li>Klick auf eine Karte öffnet die große Ansicht. Dort schaltest du zwischen deinen Ausführungen um und kannst verkaufen.</li>
 <li><b>Looks übertragen</b> (unter „Alle Karten &amp; Looks“): Abtragen gibt Staub dieses Looks (Klassennummer), Auftragen kostet ${CONFIG.staub.auftragKosten} Staub.</li>
 <li><b>Doppelte verkaufen</b>: Je Monster und Ausführung bleiben die stärksten Karten, schwache Doppelte werden zu Münzen. Teamkarten werden nie verkauft.</li></ul>`),
+    abschnitt('Belohnungen: Glücksrad, Truhe, Quests, Goldene Stunde', `<ul>
+<li><b>🎡 Glücksrad:</b> Nach jedem Sieg drehst du einmal. Münzen, Packs, Staub, selten ein Glückspack, ganz selten der <b>Jackpot</b> (${CONFIG.gluecksrad.jackpot.packs} Packs, ein Kernpack, viele Münzen). Je weiter du bist, desto größer die Gewinne. Die Chancen stehen unter dem Rad.</li>
+<li><b>🧰 Tägliche Truhe:</b> Einmal am Tag (oben in der Leiste). Die Belohnung wächst mit deiner Login-Serie, Tag ${CONFIG.login.tage.length} ist die große Truhe, jeder 30. Tag gibt zusätzlich ${lohnTextHilfe(CONFIG.login.alle30)}. Ein ausgelassener Tag setzt die Serie zurück.</li>
+<li><b>📜 Quests:</b> Jeden Tag 3 neue, jede Woche 3 größere (unter „Erfolge“). Fertige Quests holst du dort ab; die rote Zahl an „Erfolge“ zeigt, was bereitliegt.</li>
+<li><b>✨ Goldene Stunde:</b> Zufällige Stunden (etwa ${Math.round(CONFIG.goldeneStunde.chance * 24)} am Tag), in denen normale Packs alle seltenen Chancen ×${CONFIG.goldeneStunde.mult} haben. Oben in der Leiste siehst du die nächste und den Countdown.</li>
+<li><b>🧩 Element-Sets:</b> Alle Monster eines Elements gefunden: Belohnung und dauerhaft +${CONFIG.elementSet.bonusKraft} Elementarkraft für deine Karten dieses Elements im Kampf.</li></ul>`),
     abschnitt('Staub, Verbessern und Ernten', `<p>Jede Karte lässt sich über <b>⬆ Verbessern</b> verbessern: im Album in der großen Kartenansicht, in „Alle Karten &amp; Looks“ und im Team.</p>
 <ul><li><b>⚔ Kampfstaub</b> gibt es für jeden Kampagnensieg (Bosse, Kern und Turm mehr). Damit verstärkst du ein Attribut um +1. Kosten: aufgerundet 1,1^Stärke, also exponentiell teurer, je stärker die Karte ist.</li>
 <li><b>🎲 Glücksstaub</b> würfelt eine Karte neu (${CONFIG.gluecksstaub.rerollKosten(0)} × Klassennummer). Die Karte wird dabei <b>nie schwächer</b>: Deine bisherigen Attributpunkte bleiben erhalten, zusätzliche Stärke wird nach der Rolle obendrauf verteilt. Die Klasse kann aufsteigen, bis zu <b>Brilliant</b>, und neue Effekte können dazukommen. Bestehende Effekte bleiben.</li>
@@ -78,6 +85,7 @@ export function hilfe() {
     abschnitt('Endgame: Kernpacks und Ewiger Turm', `<ul><li><b>★ Kernpacks</b> (Chancen ×${CONFIG.sonderPackTypen.kern.faktor}) für jede Welt der Kern-Dimension, <b>✷ Tiefkernpacks</b> (×${CONFIG.sonderPackTypen.tief.faktor}) für jede Welt des Tiefen Kerns.</li>
 <li>Der <b>♜ Ewige Turm</b> öffnet sich nach dem Tiefen Kern: ${fmt(CONFIG.turm.stufen)} Stufen, jede Stufe <b>+10 %</b> stärker (Elementarkraft und Leben der Gegner × 1,1^Stufe, im Kampf als „Stärkebuff“ angezeigt). Jeder Sieg bringt ein <b>Turmpack</b> (Chancen ×${CONFIG.sonderPackTypen.turm.faktor}) und viel Kampfstaub.</li></ul>`),
     abschnitt('Kampf steuern', `<ul><li><b>Eigene Feldkarte antippen:</b> Unter dem Brett wählst du <b>Angriff auf</b> (gegenüber oder, mit Wildheit, ein Gegner bis zu dieser Größe) und das <b>Element</b> für die Verschiebung (Seltsamkeit). „Automatisch“ lässt die beste Wahl treffen.</li>
+<li><b>Kritische Treffer:</b> Jeder Treffer hat ${Math.round(CONFIG.krit.chance * 100)} % Chance auf ×${String(CONFIG.krit.faktor).replace('.', ',')} Schaden. Mehrere Kills in einer Runde ergeben eine <b>Kombo</b>.</li>
 <li><b>👁 Vorschau</b> zeigt, wer wen angreift und wer ausgeschaltet wird, wenn du jetzt „Kampf!“ drückst.</li>
 <li><b>Auto-Beschwören</b> (Standard aus) beschwört zu Beginn jedes Zuges automatisch, du kämpfst selbst. Mit 🤖 auf einer Handkarte legst du fest, ob sie automatisch beschworen werden darf (Standard: alle). Beides wird je Team gespeichert.</li>
 <li><b>Kampfprotokoll</b>: Filter für alle Aktionen, nur deine oder nur die des Gegners.</li></ul>`),

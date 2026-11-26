@@ -15,6 +15,8 @@ import { einstellungen } from './ui/einst.js';
 import { hilfe } from './ui/hilfe.js';
 import { ladeSprites } from './sprites.js';
 import { galerieScreen } from './ui/galerie.js';
+import { loginTruhePruefen, loginTruheZeigen, goldChip, extrasMelden, offeneMeldungen } from './ui/extras.js';
+import { loginStand } from './extras.js';
 
 const SCREENS = {
   packs: { titel: 'Packs', f: packsScreen },
@@ -60,13 +62,21 @@ function kopfleiste() {
   const zahnrad = h('button', { class: 'werkzeug', 'aria-label': 'Einstellungen', 'data-tip': 'Einstellungen', html: ICON.zahnrad, onclick: () => einstellungen(zeichne) });
   const hilfeBtn = h('button', { class: 'werkzeug hilfe-btn', 'aria-label': 'Hilfe', 'data-tip': 'Hilfe: alles erklärt', text: '?', onclick: () => hilfe() });
   ton.addEventListener('click', () => { S.d.einst.stumm = !S.d.einst.stumm; einstellen(S.d.einst.lautstaerke, S.d.einst.stumm); zeichne(); speichern(); });
-  status.append(muenzen, packs, staub, ton, hilfeBtn, zahnrad);
+  // Mehr Dopamin [Nutzer, 26.11.2026]: Goldene Stunde und tägliche Truhe in der Kopfleiste
+  const truhe = h('button', { class: 'chip knopf truhe-chip', 'data-tip': 'Tägliche Truhe', onclick: () => loginTruheZeigen() });
+  status.append(goldChip(), truhe, muenzen, packs, staub, ton, hilfeBtn, zahnrad);
   const zeichne = () => {
     muenzen.innerHTML = `${ICON.muenze}<b>${fmt(S.d.muenzen)}</b>`;
     packs.innerHTML = `${ICON.pack}<b>${fmt(S.d.packs)}</b>`;
     const gesamt = LOOKS.reduce((x, l) => x + S.d.staub[l.key], 0);
     staub.innerHTML = `${ICON.staub}<b>${fmt(gesamt)}</b>`;
     staub.dataset.tip = 'Staub: ' + LOOKS.map((l) => `${l.kurz} ${S.d.staub[l.key]}`).join(' · ');
+    const ls = loginStand();
+    truhe.innerHTML = ls.offen ? '🧰<b>!</b>' : '🧰';
+    truhe.classList.toggle('offen', ls.offen);
+    const offen = offeneMeldungen() + Object.keys(S.d.erfolge || {}).filter((id) => !S.d.erfolgeAbgeholt?.[id]).length;
+    const eb = document.querySelector('.nav button[data-nav="erfolge"]');
+    if (eb) { eb.dataset.badge = offen || ''; eb.classList.toggle('badge', offen > 0); }
     ton.innerHTML = S.d.einst.stumm ? ICON.stumm : ICON.laut;
     ton.dataset.tip = S.d.einst.stumm ? 'Ton ist aus' : 'Ton ist an';
   };
@@ -94,10 +104,11 @@ async function start() {
     if (SCREENS[z] && z !== aktuellName && z !== 'kampf' && !document.querySelector('.oeffnen')) nav(z);
   });
   // Erfolge regelmäßig prüfen (Sammlung, Funde)
-  setInterval(() => { const neu = pruefeErfolge(); if (neu.length) erfolgeMelden(neu); }, 4000);
+  setInterval(() => { const neu = pruefeErfolge(); if (neu.length) erfolgeMelden(neu); extrasMelden(); }, 4000);
   const ziel = (location.hash || '').slice(1).split('?')[0];
   nav(SCREENS[ziel] && ziel !== 'kampf' ? ziel : 'packs');
   document.getElementById('lade').remove();
+  loginTruhePruefen();
 }
 
 start().catch((e) => {
